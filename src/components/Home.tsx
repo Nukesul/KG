@@ -32,6 +32,7 @@ function Home() {
   const currentVideoRef = useRef<HTMLVideoElement>(null);
   const [isPaused, setIsPaused] = useState(false);
 
+  // ==================== useEffects ====================
   useEffect(() => {
     const setVh = () => {
       document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
@@ -86,6 +87,7 @@ function Home() {
     return () => elem.removeEventListener('scroll', updateProgress);
   }, []);
 
+  // Parallax (только десктоп, улучшено для плавности)
   useEffect(() => {
     const container = videoContainerRef.current;
     if (!container || 'ontouchstart' in window || navigator.maxTouchPoints > 0) return;
@@ -100,15 +102,15 @@ function Home() {
       let x = (e.clientX - rect.left) / rect.width - 0.5;
       let y = (e.clientY - rect.top) / rect.height - 0.5;
       const dist = Math.hypot(x, y);
-      const curve = 1 + dist * 0.08; // Уменьшили интенсивность для плавности
-      targetX = x * curve * 8; // Сниженное смещение для меньшей резкости
+      const curve = 1 + dist * 0.08;
+      targetX = x * curve * 8;
       targetY = y * curve * 8;
-      targetScale = 1 + dist * 0.015; // Меньший зум
+      targetScale = 1 + dist * 0.015;
     };
 
     const animate = () => {
       if (!isActive) return;
-      currentX += (targetX - currentX) * 0.25; // Замедлили сходимость для smoother переходов
+      currentX += (targetX - currentX) * 0.25;
       currentY += (targetY - currentY) * 0.25;
       currentScale += (targetScale - currentScale) * 0.25;
 
@@ -139,21 +141,29 @@ function Home() {
     };
   }, []);
 
+  // Preload следующего видео и улучшено для нескольких вперед
   useEffect(() => {
-    const nextId = currentMonth.id % 12 + 1;
-    const nextVideo = months.find(m => m.id === nextId)!.video;
-    const link = document.createElement('link');
-    link.rel = 'preload';
-    link.as = 'video';
-    link.href = `${VIDEO_BASE_URL}${nextVideo}`;
-    link.type = 'video/mp4';
-    document.head.appendChild(link);
+    const preloadVideos = [currentMonth.id % 12 + 1, (currentMonth.id + 1) % 12 + 1];
+    preloadVideos.forEach(id => {
+      const video = months.find(m => m.id === id)!.video;
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'fetch';
+      link.href = `${VIDEO_BASE_URL}${video}`;
+      document.head.appendChild(link);
+    });
 
     if (currentVideoRef.current) {
       currentVideoRef.current.poster = `${VIDEO_BASE_URL}${currentMonth.video.replace('.mp4', '.jpg')}`;
     }
 
-    return () => { document.head.removeChild(link); };
+    return () => {
+      preloadVideos.forEach(id => {
+        const video = months.find(m => m.id === id)!.video;
+        const links = document.querySelectorAll(`link[href="${VIDEO_BASE_URL}${video}"]`);
+        links.forEach(link => document.head.removeChild(link));
+      });
+    };
   }, [currentMonth]);
 
   return (
@@ -203,8 +213,8 @@ function Home() {
         </div>
 
         <div className="controls">
-          <button onClick={togglePause}>
-            {isPaused ? '▶️' : '⏸️'}
+          <button onClick={togglePause} aria-label={isPaused ? "Воспроизвести" : "Пауза"}>
+            {isPaused ? '▶' : '❚❚'}
           </button>
         </div>
 
@@ -215,6 +225,7 @@ function Home() {
                 key={month.id}
                 className={`month-btn ${currentMonth.id === month.id ? 'active' : ''}`}
                 onClick={() => handleMonthChange(month)}
+                aria-label={month.name}
               >
                 <span className="full-name">{month.name}</span>
                 <span className="short-name">{month.short}</span>
@@ -222,7 +233,7 @@ function Home() {
             ))}
             <div className="scroll-hint">
               <svg viewBox="0 0 24 24" className="scroll-arrow">
-                <path d="M8 5l8 7-8 7" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M8 5l8 7-8 7" stroke="currentColor" strokeWidth="2.25" fill="none" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
           </div>
