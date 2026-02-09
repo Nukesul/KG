@@ -12,7 +12,7 @@
   --surface-hover: rgba(0, 0, 0, 0.55);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --kyrgyz-pattern-opacity: 0.06; /* Subtle орнамент для фона */
+  --kyrgyz-pattern-opacity: 0.06; 
 }
 
 * {
