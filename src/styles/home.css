@@ -1,0 +1,399 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&display=swap');
+
+:root {
+  --vh: 1vh;
+  --primary: #e32636; /* Красный как флаг Кыргызстана */
+  --accent: #ffd700; /* Желтый как солнце на флаге, для акцентов */
+  --primary-soft: rgba(227, 38, 54, 0.24); /* Увеличена непрозрачность для лучшего контраста */
+  --white: #ffffff;
+  --black: #000000;
+  --text-muted: rgba(255, 255, 255, 0.98); /* Ещё ярче для читаемости */
+  --surface: rgba(0, 0, 0, 0.45); /* Темнее фон для кнопок, чтобы текст выделялся */
+  --surface-hover: rgba(0, 0, 0, 0.55);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --kyrgyz-pattern-opacity: 0.06; 
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Montserrat', system-ui, -apple-system, sans-serif;
+  color: var(--white);
+  background: var(--black);
+  overflow: hidden;
+}
+
+.hero {
+  position: relative;
+  width: 100vw;
+  height: calc(var(--vh, 1vh) * 100);
+  overflow: hidden;
+  padding-bottom: var(--safe-bottom);
+  background: radial-gradient(circle at top, rgba(227, 38, 54, 0.1), transparent 70%); /* Subtle кыргызский градиент */
+}
+
+.video-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.hero-video {
+  position: absolute;
+  inset: -2%;
+  width: 104%;
+  height: 104%;
+  object-fit: cover;
+  will-change: transform, opacity;
+  transition: opacity 0.6s ease, transform 0.8s ease-out; /* Добавили easing для плавности зума */
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+}
+
+.hero-video.fade-out { opacity: 0; }
+.hero-video.fade-in  { opacity: 1; }
+
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(0,0,0,0.32), transparent 75%);
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.85; /* Чуть меньше затемнения для лучшей видимости видео */
+}
+
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: clamp(60px, 10vh, 80px);
+  padding-top: var(--safe-top);
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.logo {
+  width: clamp(120px, 24vw, 180px); /* Увеличен размер для лучшей видимости */
+  height: auto;
+  filter: drop-shadow(0 2px 4px rgba(227, 38, 54, 0.15)); /* Subtle красный тень для стиля */
+}
+
+.title-corner {
+  position: absolute;
+  top: clamp(80px, 10vh, 120px); /* Чуть ниже для лучшего баланса */
+  left: clamp(16px, 4vw, 32px); /* Больше отступа */
+  z-index: 3;
+  max-width: clamp(240px, 60vw, 480px); /* Шире для комфорта */
+  padding: clamp(16px, 3vw, 20px); /* Больше padding */
+  border-radius: 16px; /* Мягче углы */
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(8px); /* Сильнее блюр для премиум вида */
+  transition: background 0.25s ease, box-shadow 0.3s ease;
+  box-shadow: 0 4px 12px rgba(227, 38, 54, 0.08); /* Легкий кыргызский акцент в тени */
+}
+
+.title-corner:hover {
+  background: rgba(0,0,0,0.42);
+  box-shadow: 0 6px 16px rgba(227, 38, 54, 0.12);
+}
+
+.main-title,
+.subtitle,
+.description {
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  hyphenate-limit-chars: 3 2 3;
+  line-height: 1.45; /* Больше воздуха для читаемости */
+  letter-spacing: 0.03em; /* Легкий spacing для элегантности */
+}
+
+.main-title {
+  font-size: clamp(1.6rem, 5.5vw, 3.2rem); /* Чуть крупнее */
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.4); /* Мягче тень */
+  color: #fff; /* Белый для контраста */
+}
+
+.subtitle {
+  font-size: clamp(0.85rem, 2.2vw, 1.1rem); /* Чуть крупнее */
+  font-weight: 400;
+  opacity: 0.96;
+  margin-bottom: 0.6rem;
+  color: var(--text-muted);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.28);
+}
+
+.description {
+  font-size: clamp(0.8rem, 2vw, 1rem); /* Чуть крупнее */
+  font-weight: 300;
+  opacity: 0.93;
+  color: var(--text-muted);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.28);
+}
+
+.controls {
+  position: absolute;
+  bottom: clamp(100px, 14vh, 120px); /* Выше для лучшего доступа на мобильных */
+  left: clamp(20px, 5vw, 32px); /* Больше отступа */
+  z-index: 3;
+  display: flex;
+  gap: clamp(16px, 4vw, 24px);
+  align-items: center;
+}
+
+.controls button {
+  background: var(--primary-soft);
+  border: none;
+  color: white;
+  padding: clamp(10px, 2.5vw, 12px) clamp(16px, 4vw, 20px); /* Ещё крупнее кнопки */
+  border-radius: 10px; /* Ещё мягче углы */
+  font-size: clamp(1rem, 2.5vw, 1.1rem); /* Крупнее текст для видимости */
+  cursor: pointer;
+  transition: all 0.2s ease-out;
+  min-width: 48px; /* Минимальная ширина */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 8px rgba(227, 38, 54, 0.12); /* Усилена тень */
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3); /* Тень текста для контраста */
+}
+
+.controls button:hover {
+  background: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(227, 38, 54, 0.2);
+}
+
+.months-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: clamp(12px, 3vw, 16px) clamp(12px, 3vw, 24px); /* Ещё больше padding */
+  padding-bottom: calc(clamp(12px, 3vw, 16px) + var(--safe-bottom));
+  z-index: 3;
+  background: linear-gradient(to top, rgba(0,0,0,0.75), transparent 88%); /* Темнее градиент для контраста */
+  pointer-events: none;
+}
+
+.months-scroll {
+  display: flex;
+  gap: clamp(10px, 2.5vw, 14px); /* Ещё больше gap */
+  overflow-x: auto;
+  padding: 8px 0; /* Ещё больше padding */
+  scrollbar-width: none;
+  pointer-events: auto;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+}
+
+.months-scroll::-webkit-scrollbar { display: none; }
+
+.month-btn {
+  background: var(--surface);
+  border: none;
+  border-radius: 10px; /* Ещё мягче углы */
+  color: var(--white);
+  font-size: clamp(0.8rem, 2.2vw, 1rem); /* Крупнее текст */
+  font-weight: 500;
+  padding: clamp(10px, 2.5vw, 12px) clamp(16px, 4vw, 20px); /* Крупнее кнопки */
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s ease-out;
+  min-width: clamp(60px, 14vw, 80px); /* Ещё шире кнопки */
+  scroll-snap-align: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15); /* Усилены тени */
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3); /* Тень текста для лучшей видимости */
+}
+
+.month-btn:hover {
+  background: var(--surface-hover);
+  transform: scale(1.05);
+  box-shadow: 0 4px 10px rgba(247, 244, 244, 0.062);
+}
+
+.month-btn.active {
+  background: rgba(255, 252, 252, 0.1); /* Ярче активный фон */
+  transform: scale(1.06);
+  box-shadow: 0 4px 14px rgba(95, 94, 95, 0.25);
+  color: var(--accent); /* Желтый текст для активной кнопки */
+}
+
+.full-name { display: block; }
+.short-name { display: none; }
+
+.scroll-hint {
+  position: sticky;
+  right: 0;
+  padding-left: clamp(12px, 3vw, 16px); /* Больше padding */
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.874), transparent);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: opacity 0.25s;
+}
+
+.months-scroll.scrolled-to-end .scroll-hint { opacity: 0; }
+
+.scroll-arrow {
+  width: clamp(20px, 4.5vw, 24px); /* Крупнее стрелка */
+  height: clamp(20px, 4.5vw, 24px);
+  color: var(--primary);
+  opacity: 0.85;
+  animation: pulse 1.4s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(5px); }
+}
+
+.scroll-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 3px; /* Толще индикатор */
+  background: rgba(255,255,255,0.1);
+}
+
+.scroll-progress {
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.2s ease;
+  box-shadow: 0 0 10px rgba(227,38,54,0.5); /* Ярче свечение */
+}
+
+/* Улучшенные медиа-запросы с дополнительными брейкпоинтами */
+@media (max-width: 768px) {
+  .title-corner {
+    max-width: 70vw;
+    left: 14px;
+    top: clamp(70px, 9vh, 100px);
+    padding: 14px;
+  }
+
+  .main-title   { font-size: clamp(1.4rem, 5.2vw, 2.5rem); }
+  .subtitle     { font-size: clamp(0.8rem, 2.1vw, 1rem); }
+  .description  { font-size: clamp(0.75rem, 1.95vw, 0.92rem); }
+
+  .controls {
+    bottom: clamp(80px, 12vh, 100px);
+    left: 16px;
+    gap: 14px;
+  }
+
+  .controls button {
+    padding: 8px 14px;
+    font-size: 0.9rem;
+  }
+
+  .month-btn {
+    min-width: 50px;
+    padding: 8px 14px;
+    font-size: clamp(0.72rem, 2.2vw, 0.85rem);
+  }
+
+  .months-bar {
+    padding: 10px 10px calc(10px + var(--safe-bottom)) 10px;
+  }
+
+  .logo {
+    width: clamp(100px, 22vw, 150px);
+  }
+}
+
+@media (max-width: 480px) {
+  .full-name { display: none; }
+  .short-name { display: block; }
+
+  .title-corner {
+    max-width: 85vw;
+    left: 12px;
+    top: clamp(60px, 8vh, 90px);
+    padding: 12px;
+    box-shadow: 0 4px 10px rgba(227,38,54,0.08);
+  }
+
+  .main-title   { font-size: clamp(1.3rem, 6vw, 2rem); }
+  .subtitle     { font-size: clamp(0.75rem, 2.8vw, 0.95rem); }
+  .description  { font-size: clamp(0.7rem, 2.5vw, 0.85rem); }
+
+  .controls {
+    bottom: clamp(70px, 10vh, 90px);
+    left: 14px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .controls button {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+  }
+
+  .month-btn {
+    min-width: 70px;
+    padding: 16px 0;
+    font-size: clamp(0.8rem, 2.8vw, 1rem);
+  }
+
+  .months-bar {
+    padding: 8px 8px calc(8px + var(--safe-bottom)) 8px;
+  }
+
+  .logo {
+    width: clamp(90px, 28vw, 140px);
+  }
+}
+
+@media (min-width: 1024px) {
+  /* Дополнительные улучшения для десктопа */
+  .title-corner {
+    max-width: 500px;
+    left: 40px;
+    top: 130px;
+    padding: 24px;
+  }
+
+  .main-title   { font-size: 3.5rem; }
+  .subtitle     { font-size: 1.2rem; }
+  .description  { font-size: 1.05rem; }
+
+  .controls {
+    bottom: 140px;
+    left: 40px;
+    gap: 28px;
+  }
+
+  .controls button {
+    padding: 12px 20px;
+    font-size: 1rem;
+  }
+
+  .month-btn {
+    min-width: 90px;
+    padding: 12px 20px;
+    font-size: 1rem;
+  }
+
+  .months-bar {
+    padding: 16px 28px calc(16px + var(--safe-bottom)) 28px;
+  }
+
+  .logo {
+    width: 200px;
+  }
+}
