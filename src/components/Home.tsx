@@ -87,7 +87,6 @@ function Home() {
     return () => elem.removeEventListener('scroll', updateProgress);
   }, []);
 
-  // Parallax (только десктоп, улучшено для плавности)
   useEffect(() => {
     const container = videoContainerRef.current;
     if (!container || 'ontouchstart' in window || navigator.maxTouchPoints > 0) return;
