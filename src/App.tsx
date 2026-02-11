@@ -4,7 +4,7 @@ import Admin from "./components/Admin";
 import Login from "./components/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
 
-function App() {
+export default function App() {
   return (
     <BrowserRouter basename="/KG">
       <Routes>
@@ -26,5 +26,3 @@ function App() {
     </BrowserRouter>
   );
 }
-
-export default App;

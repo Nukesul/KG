@@ -6,15 +6,21 @@ import "tippy.js/dist/tippy.css";
 import "../styles/home.css";
 import logo from "../assets/logo.png";
 import { supabase } from "../lib/supabaseClient";
+import KyrgyzstanMap from "./KyrgyzstanMap";
 
 const VIDEO_BASE_URL = "https://pub-d90782a2cc9c4ef6903dbc26fa37ea43.r2.dev/";
 
 type MonthPost = {
   id: number;
-  title: string;
-  content: string;
-  video_file: string;
+  title: string | null;
+  content: string | null;
+  video_file: string | null;
   created_at: string;
+
+  region: string | null;   // chui / naryn / issyk_kul ...
+  season: string | null;   // winter/spring/summer/autumn
+  fact: string | null;     // 1 строка
+  map_url: string | null;  // ссылка
 };
 
 const MONTHS_SHORT_RU = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
@@ -37,10 +43,33 @@ function useViewportCSSVar() {
   }, []);
 }
 
-function clampText(s: string, max = 120) {
+function clampText(s: string, max = 110) {
   const t = (s || "").trim();
   if (t.length <= max) return t;
   return t.slice(0, max).trimEnd() + "…";
+}
+
+function seasonLabel(s?: string | null) {
+  const v = (s || "").toLowerCase();
+  if (v === "winter") return "Зима";
+  if (v === "spring") return "Весна";
+  if (v === "summer") return "Лето";
+  if (v === "autumn") return "Осень";
+  return "Сезон";
+}
+
+function regionLabel(r?: string | null) {
+  const v = (r || "").toLowerCase();
+  const map: Record<string, string> = {
+    chui: "Чуй",
+    issyk_kul: "Иссык-Куль",
+    naryn: "Нарын",
+    osh: "Ош",
+    jalal_abad: "Жалал-Абад",
+    talas: "Талас",
+    batken: "Баткен",
+  };
+  return map[v] || "Область";
 }
 
 export default function Home() {
@@ -52,12 +81,18 @@ export default function Home() {
   const [isFading, setIsFading] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
 
-  // ✅ UI overlay visibility (авто-прячется)
+  // ✅ звук: по умолчанию muted
+  const [muted, setMuted] = useState(true);
+
+  // ✅ cinema mode
+  const [cinema, setCinema] = useState(false);
+
+  // ✅ автоскрытие UI
   const [uiVisible, setUiVisible] = useState(true);
   const hideTimer = useRef<number | null>(null);
 
-  // ✅ Full info panel
-  const [infoOpen, setInfoOpen] = useState(false);
+  // ✅ если автоплей заблокирован
+  const [needsTapToStart, setNeedsTapToStart] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -78,34 +113,84 @@ export default function Home() {
     load();
   }, []);
 
-  const videoSrc = useMemo(() => (current ? `${VIDEO_BASE_URL}${current.video_file}` : ""), [current]);
+  const videoSrc = useMemo(() => {
+    if (!current?.video_file) return "";
+    return `${VIDEO_BASE_URL}${current.video_file}`;
+  }, [current?.video_file]);
+
   const videoType = useMemo(() => {
     const f = current?.video_file?.toLowerCase() || "";
     return f.endsWith(".webm") ? "video/webm" : "video/mp4";
-  }, [current]);
+  }, [current?.video_file]);
+
+  const theme = useMemo(() => {
+    if (!current) return "t1";
+    const idx = (current.id ?? 1) % 4;
+    return ["t1", "t2", "t3", "t4"][idx];
+  }, [current?.id]);
 
   const showUI = (autoHide = true) => {
+    if (cinema) return;
     setUiVisible(true);
     if (hideTimer.current) window.clearTimeout(hideTimer.current);
-    if (autoHide) {
-      hideTimer.current = window.setTimeout(() => setUiVisible(false), 2500);
+    if (autoHide) hideTimer.current = window.setTimeout(() => setUiVisible(false), 2200);
+  };
+
+  const tryPlay = async () => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    v.muted = muted;
+    v.playsInline = true;
+
+    if (isPaused) return;
+
+    try {
+      await v.play();
+      setNeedsTapToStart(false);
+    } catch {
+      setNeedsTapToStart(true);
     }
   };
 
-  // Show UI initially then auto-hide
   useEffect(() => {
-    showUI(true);
-    return () => {
-      if (hideTimer.current) window.clearTimeout(hideTimer.current);
-    };
+    if (!current) return;
+
+    if (cinema) setUiVisible(false);
+    else showUI(true);
+
+    const t = window.setTimeout(() => tryPlay(), 60);
+    return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") tryPlay();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [muted, isPaused]);
+
+  useEffect(() => {
+    const onGesture = () => {
+      if (needsTapToStart) tryPlay();
+    };
+    window.addEventListener("touchstart", onGesture, { passive: true });
+    window.addEventListener("pointerdown", onGesture, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onGesture);
+      window.removeEventListener("pointerdown", onGesture);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsTapToStart, muted, isPaused]);
 
   const changeMonth = (m: MonthPost) => {
     if (!current || m.id === current.id) return;
 
     setIsFading(true);
-    setInfoOpen(false);
+    setNeedsTapToStart(false);
     showUI(true);
 
     window.setTimeout(() => {
@@ -113,11 +198,9 @@ export default function Home() {
       setIsFading(false);
 
       const v = videoRef.current;
-      if (v) {
-        v.load();
-        if (!isPaused) v.play().catch(() => {});
-      }
-    }, 420);
+      if (v) v.load();
+      window.setTimeout(() => tryPlay(), 60);
+    }, 380);
   };
 
   const onEnded = () => {
@@ -130,10 +213,39 @@ export default function Home() {
   const togglePause = () => {
     const v = videoRef.current;
     if (!v) return;
-    if (isPaused) v.play().catch(() => {});
-    else v.pause();
-    setIsPaused((p) => !p);
+
+    if (isPaused) {
+      setIsPaused(false);
+      window.setTimeout(() => tryPlay(), 0);
+    } else {
+      v.pause();
+      setIsPaused(true);
+    }
     showUI(true);
+  };
+
+  const toggleMuted = () => {
+    const v = videoRef.current;
+    const next = !muted;
+    setMuted(next);
+    if (v) {
+      v.muted = next;
+      window.setTimeout(() => tryPlay(), 0);
+    }
+    showUI(true);
+  };
+
+  const toggleCinema = () => {
+    setCinema((prev) => {
+      const next = !prev;
+      if (next) {
+        setUiVisible(false);
+      } else {
+        setUiVisible(true);
+        showUI(true);
+      }
+      return next;
+    });
   };
 
   // Scroll indicator
@@ -152,7 +264,7 @@ export default function Home() {
     return () => el.removeEventListener("scroll", update);
   }, [months.length]);
 
-  // center active month
+  // Center active button
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !current) return;
@@ -162,135 +274,123 @@ export default function Home() {
     el.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
   }, [current?.id]);
 
-  // ESC closes info
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setInfoOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
   if (!current) return null;
 
-  const preview = clampText(current.content, 120);
+  const preview = clampText(current.content || "", 110);
+  const fact = clampText(current.fact || "", 90);
+
+  const activeRegion = (current.region || "").toLowerCase();
 
   return (
-    <div className="app-shell">
-      <header className={`header ${uiVisible ? "" : "hidden-ui"}`}>
+    <div
+      className={`fs-shell ${theme} ${cinema ? "cinema" : ""}`}
+      onPointerMove={() => showUI(true)}
+      onClick={() => showUI(true)}
+    >
+      <div className="video-layer">
+        <motion.video
+          ref={videoRef}
+          className={`hero-video ${isFading ? "fade-out" : "fade-in"}`}
+          autoPlay
+          muted={muted}
+          playsInline
+          preload="metadata"
+          onEnded={onEnded}
+          onCanPlay={() => tryPlay()}
+          key={`video-${current.id}`}
+        >
+          <source src={videoSrc} type={videoType} />
+        </motion.video>
+
+        <div className={`overlay ${uiVisible && !cinema ? "overlay-strong" : "overlay-weak"} ${cinema ? "overlay-cinema" : ""}`} />
+        <div className={`vignette ${cinema ? "vignette-cinema" : ""}`} />
+        <div className="grain" aria-hidden="true" />
+      </div>
+
+      <header className={`header ${uiVisible && !cinema ? "" : "hidden-ui"}`}>
         <img src={logo} alt="Кыргызстан" className="logo" />
       </header>
 
-      <main className="stage">
-        <div className="video-layer" onClick={() => showUI(true)} onPointerDown={() => showUI(true)}>
-          <motion.video
-            ref={videoRef}
-            className={`hero-video ${isFading ? "fade-out" : "fade-in"}`}
-            autoPlay={!isPaused}
-            muted
-            playsInline
-            preload="auto"
-            onEnded={onEnded}
-            key={`video-${current.id}`}
+      {/* мини-карта (не мешает) */}
+      <KyrgyzstanMap activeRegion={activeRegion} mapUrl={current.map_url} />
+
+      {/* если автоплей заблокирован */}
+      <AnimatePresence>
+        {needsTapToStart && !cinema ? (
+          <motion.div
+            className="tap-to-start"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 0.95, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.2 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              tryPlay();
+            }}
           >
-            <source src={videoSrc} type={videoType} />
-          </motion.video>
+            Нажми, чтобы запустить видео
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
-          {/* Минимальный градиент только для читабельности текста */}
-          <div className={`overlay ${uiVisible ? "overlay-strong" : "overlay-weak"}`} />
-          <div className="vignette" />
-        </div>
+      <AnimatePresence>
+        {uiVisible && !cinema ? (
+          <motion.section
+            className="mini-info"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          >
+            <div className="mini-top">
+              <h1 className="mini-title">{current.title || "Кыргызстан"}</h1>
 
-        {/* ✅ Мини-лейбл (почти не мешает) */}
-        <AnimatePresence>
-          {uiVisible ? (
-            <motion.section
-              className="mini-info"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              onPointerMove={() => showUI(true)}
-            >
-              <div className="mini-top">
-                <h1 className="mini-title">{current.title}</h1>
-                <button className="mini-btn" type="button" onClick={() => setInfoOpen(true)}>
-                  Подробнее
-                </button>
+              <div className="mini-badges">
+                <span className="badge">{regionLabel(current.region)}</span>
+                <span className="badge season">{seasonLabel(current.season)}</span>
               </div>
-              <p className="mini-sub">Горы • Озёра • Традиции</p>
-              <p className="mini-desc">{preview}</p>
-            </motion.section>
-          ) : null}
-        </AnimatePresence>
+            </div>
 
-        {/* ✅ Controls появляются/исчезают вместе с UI */}
-        <AnimatePresence>
-          {uiVisible ? (
-            <motion.div
-              className="controls"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 6 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-            >
-              <button className="ctrl-btn" onClick={togglePause} aria-label={isPaused ? "Play" : "Pause"}>
-                {isPaused ? "▶" : "❚❚"}
-              </button>
-              <button className="ctrl-btn secondary" onClick={() => setInfoOpen(true)} aria-label="Info">
-                i
-              </button>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
+            {/* 1 строка факта (главное!) */}
+            {fact ? <p className="mini-fact">💡 {fact}</p> : null}
 
-        {/* ✅ Full info panel (не мешает просмотру: только по кнопке) */}
-        <AnimatePresence>
-          {infoOpen ? (
-            <>
-              <motion.div
-                className="sheet-backdrop"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setInfoOpen(false)}
-              />
-              <motion.aside
-                className="sheet"
-                role="dialog"
-                aria-modal="true"
-                initial={{ y: 30, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 30, opacity: 0 }}
-                transition={{ duration: 0.22, ease: "easeOut" }}
-              >
-                <div className="sheet-handle" />
-                <div className="sheet-head">
-                  <div>
-                    <div className="sheet-kicker">Описание</div>
-                    <div className="sheet-title">{current.title}</div>
-                  </div>
-                  <button className="sheet-close" onClick={() => setInfoOpen(false)} aria-label="Close">
-                    ✕
-                  </button>
-                </div>
-                <div className="sheet-body">
-                  <p>{current.content}</p>
-                </div>
-              </motion.aside>
-            </>
-          ) : null}
-        </AnimatePresence>
-      </main>
+            {/* короткое описание (1 строка) */}
+            {preview ? <p className="mini-desc">{preview}</p> : null}
+          </motion.section>
+        ) : null}
+      </AnimatePresence>
 
-      {/* ✅ Months bar всегда короткие названия */}
-      <footer className="months-bar">
-        <div className="months-scroll" ref={scrollRef} onPointerMove={() => showUI(true)}>
+      <AnimatePresence>
+        {uiVisible && !cinema ? (
+          <motion.div
+            className="controls"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          >
+            <button className="ctrl-btn" onClick={(e) => { e.stopPropagation(); togglePause(); }}>
+              {isPaused ? "▶" : "❚❚"}
+            </button>
+
+            <button className="ctrl-btn secondary" onClick={(e) => { e.stopPropagation(); toggleMuted(); }}>
+              {muted ? "🔇" : "🔊"}
+            </button>
+
+            <button className="ctrl-btn secondary" onClick={(e) => { e.stopPropagation(); toggleCinema(); }}>
+              🎬
+            </button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <footer className={`months-bar ${uiVisible && !cinema ? "" : "hidden-ui"}`} onClick={(e) => e.stopPropagation()}>
+        <div className="months-scroll" ref={scrollRef}>
           {months.map((m, i) => {
             const short = MONTHS_SHORT_RU[i % 12] ?? `${i + 1}`;
             const active = current.id === m.id;
             return (
-              <Tippy key={m.id} content={m.title} placement="top" delay={[250, 0]}>
+              <Tippy key={m.id} content={m.title || ""} placement="top" delay={[250, 0]}>
                 <button
                   type="button"
                   data-id={m.id}
@@ -321,6 +421,26 @@ export default function Home() {
           <div className="scroll-progress" style={{ width: `${scrollProgress * 100}%` }} />
         </div>
       </footer>
+
+      <AnimatePresence>
+        {cinema ? (
+          <motion.div
+            className="cinema-hint"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.85 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setCinema(false);
+              setUiVisible(true);
+              showUI(true);
+            }}
+          >
+            Тапни, чтобы выйти из 🎬 режима
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
