@@ -1,4 +1,9 @@
+# ===============================
+
 # Logs
+
+# ===============================
+
 logs
 *.log
 npm-debug.log*
@@ -7,28 +12,77 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# ===============================
+
+# Node / Build
+
+# ===============================
+
 node_modules
 dist
 dist-ssr
+build
 *.local
+.env
+.env.*
 
-# Editor directories and files
+# ===============================
+
+# Editor / OS files
+
+# ===============================
+
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# Binaries / installers
+# ===============================
+
+# Installers / binaries (IMPORTANT)
+
+# ===============================
+
 *.exe
-# Large media (external storage only)
+*.msi
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.iso
+*.zip
+*.rar
+*.7z
+
+# ===============================
+
+# Large media (store externally)
+
+# ===============================
+
 *.mp4
 *.mov
 *.avi
 *.mkv
-*.dmg
- 
+*.webm
+*.wav
+*.flac
+*.psd
+*.ai
+
+# ===============================
+
+# Cache / temp
+
+# ===============================
+
+.cache
+.tmp
+temp
+coverage
