@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Tippy from "@tippyjs/react";
 import "tippy.js/dist/tippy.css";
@@ -17,219 +17,310 @@ type MonthPost = {
   created_at: string;
 };
 
-function useViewportFix() {
+const MONTHS_SHORT_RU = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+
+function useViewportCSSVar() {
   useEffect(() => {
-    const setVh = () => {
-      // Используем визуальный viewport если есть (iOS Safari)
-      const vh = (window.visualViewport?.height ?? window.innerHeight) * 0.01;
-      document.documentElement.style.setProperty("--vh", `${vh}px`);
+    const setVars = () => {
+      const h = window.visualViewport?.height ?? window.innerHeight;
+      document.documentElement.style.setProperty("--app-vh", `${h}px`);
     };
-
-    setVh();
-    window.addEventListener("resize", setVh);
-    window.visualViewport?.addEventListener("resize", setVh);
-    window.visualViewport?.addEventListener("scroll", setVh);
-
+    setVars();
+    window.addEventListener("resize", setVars);
+    window.visualViewport?.addEventListener("resize", setVars);
+    window.visualViewport?.addEventListener("scroll", setVars);
     return () => {
-      window.removeEventListener("resize", setVh);
-      window.visualViewport?.removeEventListener("resize", setVh);
-      window.visualViewport?.removeEventListener("scroll", setVh);
+      window.removeEventListener("resize", setVars);
+      window.visualViewport?.removeEventListener("resize", setVars);
+      window.visualViewport?.removeEventListener("scroll", setVars);
     };
   }, []);
 }
 
+function clampText(s: string, max = 120) {
+  const t = (s || "").trim();
+  if (t.length <= max) return t;
+  return t.slice(0, max).trimEnd() + "…";
+}
+
 export default function Home() {
-  useViewportFix();
+  useViewportCSSVar();
 
   const [months, setMonths] = useState<MonthPost[]>([]);
-  const [currentMonth, setCurrentMonth] = useState<MonthPost | null>(null);
+  const [current, setCurrent] = useState<MonthPost | null>(null);
 
   const [isFading, setIsFading] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const currentVideoRef = useRef<HTMLVideoElement>(null);
+  // ✅ UI overlay visibility (авто-прячется)
+  const [uiVisible, setUiVisible] = useState(true);
+  const hideTimer = useRef<number | null>(null);
 
+  // ✅ Full info panel
+  const [infoOpen, setInfoOpen] = useState(false);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollProgress, setScrollProgress] = useState(0);
 
-  // LOAD DATA
+  // Load posts
   useEffect(() => {
-    const loadPosts = async () => {
-      const { data, error } = await supabase
-        .from("posts")
-        .select("*")
-        .order("id", { ascending: true });
-
+    const load = async () => {
+      const { data, error } = await supabase.from("posts").select("*").order("id", { ascending: true });
       if (error) {
         console.error("Supabase load error:", error);
         return;
       }
-
-      if (data && data.length > 0) {
-        setMonths(data as MonthPost[]);
-        setCurrentMonth(data[0] as MonthPost);
-      }
+      const rows = (data || []) as MonthPost[];
+      setMonths(rows);
+      setCurrent(rows[0] ?? null);
     };
-
-    loadPosts();
+    load();
   }, []);
 
-  const videoSrc = useMemo(() => {
-    if (!currentMonth) return "";
-    return `${VIDEO_BASE_URL}${currentMonth.video_file}`;
-  }, [currentMonth]);
-
+  const videoSrc = useMemo(() => (current ? `${VIDEO_BASE_URL}${current.video_file}` : ""), [current]);
   const videoType = useMemo(() => {
-    if (!currentMonth?.video_file) return "video/mp4";
-    return currentMonth.video_file.toLowerCase().endsWith(".webm") ? "video/webm" : "video/mp4";
-  }, [currentMonth]);
+    const f = current?.video_file?.toLowerCase() || "";
+    return f.endsWith(".webm") ? "video/webm" : "video/mp4";
+  }, [current]);
 
-  // VIDEO CHANGE
-  const handleMonthChange = (month: MonthPost) => {
-    if (!currentMonth || month.id === currentMonth.id) return;
+  const showUI = (autoHide = true) => {
+    setUiVisible(true);
+    if (hideTimer.current) window.clearTimeout(hideTimer.current);
+    if (autoHide) {
+      hideTimer.current = window.setTimeout(() => setUiVisible(false), 2500);
+    }
+  };
+
+  // Show UI initially then auto-hide
+  useEffect(() => {
+    showUI(true);
+    return () => {
+      if (hideTimer.current) window.clearTimeout(hideTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.id]);
+
+  const changeMonth = (m: MonthPost) => {
+    if (!current || m.id === current.id) return;
 
     setIsFading(true);
+    setInfoOpen(false);
+    showUI(true);
 
     window.setTimeout(() => {
-      setCurrentMonth(month);
+      setCurrent(m);
       setIsFading(false);
 
-      const v = currentVideoRef.current;
+      const v = videoRef.current;
       if (v) {
         v.load();
         if (!isPaused) v.play().catch(() => {});
       }
-    }, 450);
+    }, 420);
   };
 
-  const handleVideoEnded = () => {
-    if (!months.length || !currentMonth || isPaused) return;
-
-    const index = months.findIndex((m) => m.id === currentMonth.id);
-    const nextIndex = (index + 1) % months.length;
-    handleMonthChange(months[nextIndex]);
+  const onEnded = () => {
+    if (!months.length || !current || isPaused) return;
+    const idx = months.findIndex((x) => x.id === current.id);
+    const next = months[(idx + 1) % months.length];
+    if (next) changeMonth(next);
   };
 
   const togglePause = () => {
-    const v = currentVideoRef.current;
+    const v = videoRef.current;
     if (!v) return;
-
     if (isPaused) v.play().catch(() => {});
     else v.pause();
-
     setIsPaused((p) => !p);
+    showUI(true);
   };
 
-  // SCROLL PROGRESS
+  // Scroll indicator
   useEffect(() => {
-    const elem = scrollRef.current;
-    if (!elem) return;
+    const el = scrollRef.current;
+    if (!el) return;
 
     const update = () => {
-      const { scrollLeft, scrollWidth, clientWidth } = elem;
-      const max = scrollWidth - clientWidth;
-      setScrollProgress(max > 0 ? scrollLeft / max : 0);
-
-      elem.classList.toggle("scrolled-to-end", scrollLeft + clientWidth >= scrollWidth - 10);
-      elem.classList.toggle("scrolled-to-start", scrollLeft <= 2);
+      const max = el.scrollWidth - el.clientWidth;
+      setScrollProgress(max > 0 ? el.scrollLeft / max : 0);
+      el.classList.toggle("scrolled-to-end", el.scrollLeft + el.clientWidth >= el.scrollWidth - 8);
     };
 
-    elem.addEventListener("scroll", update, { passive: true });
+    el.addEventListener("scroll", update, { passive: true });
     update();
-
-    return () => elem.removeEventListener("scroll", update);
+    return () => el.removeEventListener("scroll", update);
   }, [months.length]);
 
-  if (!currentMonth) return null;
+  // center active month
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !current) return;
+    const btn = el.querySelector<HTMLButtonElement>(`button[data-id="${current.id}"]`);
+    if (!btn) return;
+    const left = btn.offsetLeft - (el.clientWidth - btn.clientWidth) / 2;
+    el.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+  }, [current?.id]);
+
+  // ESC closes info
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setInfoOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  if (!current) return null;
+
+  const preview = clampText(current.content, 120);
 
   return (
-    <>
-      <header className="header">
-        <div className="logo-wrapper">
-          <img src={logo} alt="Кыргызстан" className="logo" />
-        </div>
+    <div className="app-shell">
+      <header className={`header ${uiVisible ? "" : "hidden-ui"}`}>
+        <img src={logo} alt="Кыргызстан" className="logo" />
       </header>
 
-      <main className="hero">
-        <div className="video-container">
+      <main className="stage">
+        <div className="video-layer" onClick={() => showUI(true)} onPointerDown={() => showUI(true)}>
           <motion.video
-            ref={currentVideoRef}
+            ref={videoRef}
             className={`hero-video ${isFading ? "fade-out" : "fade-in"}`}
             autoPlay={!isPaused}
             muted
             playsInline
             preload="auto"
-            onEnded={handleVideoEnded}
-            onError={(e) => console.error("Video load error:", e)}
-            key={`video-${currentMonth.id}`}
+            onEnded={onEnded}
+            key={`video-${current.id}`}
           >
             <source src={videoSrc} type={videoType} />
           </motion.video>
+
+          {/* Минимальный градиент только для читабельности текста */}
+          <div className={`overlay ${uiVisible ? "overlay-strong" : "overlay-weak"}`} />
+          <div className="vignette" />
         </div>
 
-        <div className="hero-overlay" />
-
-        <section className="title-corner" aria-live="polite">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`text-${currentMonth.id}`}
-              className="title-group"
-              initial={{ opacity: 0, y: 12 }}
+        {/* ✅ Мини-лейбл (почти не мешает) */}
+        <AnimatePresence>
+          {uiVisible ? (
+            <motion.section
+              className="mini-info"
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.45, ease: "easeOut" }}
+              exit={{ opacity: 0, y: 10 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              onPointerMove={() => showUI(true)}
             >
-              <Tippy content="" disabled>
-                <h1 className="main-title">{currentMonth.title}</h1>
-              </Tippy>
-              <p className="subtitle">Горы. Озёра. Традиции.</p>
-              <p className="description">{currentMonth.content}</p>
-            </motion.div>
-          </AnimatePresence>
-        </section>
+              <div className="mini-top">
+                <h1 className="mini-title">{current.title}</h1>
+                <button className="mini-btn" type="button" onClick={() => setInfoOpen(true)}>
+                  Подробнее
+                </button>
+              </div>
+              <p className="mini-sub">Горы • Озёра • Традиции</p>
+              <p className="mini-desc">{preview}</p>
+            </motion.section>
+          ) : null}
+        </AnimatePresence>
 
-        {/* FIX: controls держим над нижней панелью + safe-area */}
-        <div className="controls">
-          <button onClick={togglePause} aria-label={isPaused ? "Воспроизвести" : "Пауза"}>
-            {isPaused ? "▶" : "❚❚"}
-          </button>
+        {/* ✅ Controls появляются/исчезают вместе с UI */}
+        <AnimatePresence>
+          {uiVisible ? (
+            <motion.div
+              className="controls"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+            >
+              <button className="ctrl-btn" onClick={togglePause} aria-label={isPaused ? "Play" : "Pause"}>
+                {isPaused ? "▶" : "❚❚"}
+              </button>
+              <button className="ctrl-btn secondary" onClick={() => setInfoOpen(true)} aria-label="Info">
+                i
+              </button>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+
+        {/* ✅ Full info panel (не мешает просмотру: только по кнопке) */}
+        <AnimatePresence>
+          {infoOpen ? (
+            <>
+              <motion.div
+                className="sheet-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setInfoOpen(false)}
+              />
+              <motion.aside
+                className="sheet"
+                role="dialog"
+                aria-modal="true"
+                initial={{ y: 30, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 30, opacity: 0 }}
+                transition={{ duration: 0.22, ease: "easeOut" }}
+              >
+                <div className="sheet-handle" />
+                <div className="sheet-head">
+                  <div>
+                    <div className="sheet-kicker">Описание</div>
+                    <div className="sheet-title">{current.title}</div>
+                  </div>
+                  <button className="sheet-close" onClick={() => setInfoOpen(false)} aria-label="Close">
+                    ✕
+                  </button>
+                </div>
+                <div className="sheet-body">
+                  <p>{current.content}</p>
+                </div>
+              </motion.aside>
+            </>
+          ) : null}
+        </AnimatePresence>
+      </main>
+
+      {/* ✅ Months bar всегда короткие названия */}
+      <footer className="months-bar">
+        <div className="months-scroll" ref={scrollRef} onPointerMove={() => showUI(true)}>
+          {months.map((m, i) => {
+            const short = MONTHS_SHORT_RU[i % 12] ?? `${i + 1}`;
+            const active = current.id === m.id;
+            return (
+              <Tippy key={m.id} content={m.title} placement="top" delay={[250, 0]}>
+                <button
+                  type="button"
+                  data-id={m.id}
+                  className={`month-btn ${active ? "active" : ""}`}
+                  onClick={() => changeMonth(m)}
+                >
+                  {short}
+                </button>
+              </Tippy>
+            );
+          })}
+
+          <div className="scroll-hint" aria-hidden="true">
+            <svg viewBox="0 0 24 24" className="scroll-arrow">
+              <path
+                d="M8 5l8 7-8 7"
+                stroke="currentColor"
+                strokeWidth="2.25"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
         </div>
 
-        {/* FIX: нижняя панель фиксированная (не absolute внутри hero) */}
-        <nav className="months-bar" aria-label="Месяцы">
-          <div className="months-scroll" ref={scrollRef}>
-            {months.map((m, i) => (
-              <button
-                key={m.id}
-                className={`month-btn ${currentMonth.id === m.id ? "active" : ""}`}
-                onClick={() => handleMonthChange(m)}
-                aria-label={m.title}
-                type="button"
-              >
-                <span className="full-name">{m.title}</span>
-                <span className="short-name">{i + 1}</span>
-              </button>
-            ))}
-
-            <div className="scroll-hint" aria-hidden="true">
-              <svg viewBox="0 0 24 24" className="scroll-arrow">
-                <path
-                  d="M8 5l8 7-8 7"
-                  stroke="currentColor"
-                  strokeWidth="2.25"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-          </div>
-
-          <div className="scroll-indicator" aria-hidden="true">
-            <div className="scroll-progress" style={{ width: `${scrollProgress * 100}%` }} />
-          </div>
-        </nav>
-      </main>
-    </>
+        <div className="scroll-indicator" aria-hidden="true">
+          <div className="scroll-progress" style={{ width: `${scrollProgress * 100}%` }} />
+        </div>
+      </footer>
+    </div>
   );
 }
