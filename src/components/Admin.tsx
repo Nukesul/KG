@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
+import "../styles/Admin.css";
 
 // =====================
 // Types
@@ -18,44 +20,14 @@ type PostRow = {
   map_url: string | null;
 };
 
-type SortKey =
-  | "id"
-  | "created_at"
-  | "title"
-  | "region"
-  | "season"
-  | "fact";
-
+type SortKey = "id" | "created_at" | "title" | "region" | "season" | "fact";
 type SortConfig = { key: SortKey; direction: "asc" | "desc" };
 
 const WORKER_BASE_URL = (import.meta.env.VITE_WORKER_BASE_URL as string) || "";
 
 // =====================
-// Helpers
+// Constants
 // =====================
-function humanFileSize(bytes: number) {
-  const units = ["B", "KB", "MB", "GB"];
-  let n = bytes;
-  let i = 0;
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024;
-    i++;
-  }
-  return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
-function stripTrailingSlash(s: string) {
-  return s.replace(/\/$/, "");
-}
-
-async function getJwtOrThrow() {
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw new Error(error.message);
-  const jwt = data.session?.access_token;
-  if (!jwt) throw new Error("Not authenticated");
-  return jwt;
-}
-
 const REGIONS = [
   { v: "chui", label: "Чуй" },
   { v: "issyk_kul", label: "Иссык-Куль" },
@@ -72,6 +44,28 @@ const SEASONS = [
   { v: "summer", label: "Лето" },
   { v: "autumn", label: "Осень" },
 ] as const;
+
+// =====================
+// Helpers
+// =====================
+function clsx(...xs: Array<string | false | undefined | null>) {
+  return xs.filter(Boolean).join(" ");
+}
+
+function stripTrailingSlash(s: string) {
+  return s.replace(/\/$/, "");
+}
+
+function humanFileSize(bytes: number) {
+  const units = ["B", "KB", "MB", "GB"];
+  let n = bytes;
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
 
 function regionLabel(v: string | null) {
   return REGIONS.find((x) => x.v === v)?.label || (v || "—");
@@ -93,107 +87,77 @@ function validateVideoFile(f: File | null) {
   return "";
 }
 
-// =====================
-// Small UI (GitHub/Amazon-ish, clean)
-// =====================
-function clsx(...xs: Array<string | false | undefined | null>) {
-  return xs.filter(Boolean).join(" ");
+async function getJwtOrThrow() {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw new Error(error.message);
+  const jwt = data.session?.access_token;
+  if (!jwt) throw new Error("Not authenticated");
+  return jwt;
 }
 
+// =====================
+// Icons (minimal, clean)
+// =====================
 function Icon({
   name,
   className,
 }: {
   name:
-    | "search"
-    | "plus"
-    | "refresh"
-    | "logout"
-    | "pencil"
-    | "trash"
-    | "upload"
-    | "x"
-    | "check"
-    | "alert"
-    | "chevDown"
-    | "chevUp"
-    | "video";
+  | "search"
+  | "plus"
+  | "refresh"
+  | "logout"
+  | "pencil"
+  | "trash"
+  | "upload"
+  | "x"
+  | "check"
+  | "alert"
+  | "chevDown"
+  | "chevUp"
+  | "video"
+  | "filter"
+  | "spark";
   className?: string;
 }) {
-  const common = clsx("inline-block", className || "w-4 h-4");
+  const c = clsx("i", className || "i-16");
   switch (name) {
     case "search":
       return (
-        <svg className={common} viewBox="0 0 24 24" fill="none">
-          <path
-            d="M10.5 18.5a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
-          <path
-            d="M16.5 16.5 21 21"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M10.5 18.5a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z" stroke="currentColor" strokeWidth="2" />
+          <path d="M16.5 16.5 21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       );
     case "plus":
       return (
-        <svg className={common} viewBox="0 0 24 24" fill="none">
-          <path
-            d="M12 5v14M5 12h14"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       );
     case "refresh":
       return (
-        <svg className={common} viewBox="0 0 24 24" fill="none">
-          <path
-            d="M21 12a9 9 0 1 1-2.64-6.36"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <path
-            d="M21 3v7h-7"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M21 3v7h-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case "logout":
       return (
-        <svg className={common} viewBox="0 0 24 24" fill="none">
+        <svg className={c} viewBox="0 0 24 24" fill="none">
           <path
             d="M10 7V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-1"
             stroke="currentColor"
             strokeWidth="2"
             strokeLinejoin="round"
           />
-          <path
-            d="M15 12H3m0 0 3-3M3 12l3 3"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <path d="M15 12H3m0 0 3-3M3 12l3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case "pencil":
       return (
-        <svg className={common} viewBox="0 0 24 24" fill="none">
-          <path
-            d="M12 20h9"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           <path
             d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"
             stroke="currentColor"
@@ -204,95 +168,43 @@ function Icon({
       );
     case "trash":
       return (
-        <svg className={common} viewBox="0 0 24 24" fill="none">
-          <path
-            d="M3 6h18"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <path
-            d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M3 6h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
           <path
             d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"
             stroke="currentColor"
             strokeWidth="2"
             strokeLinejoin="round"
           />
-          <path
-            d="M10 11v6M14 11v6"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
+          <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       );
     case "upload":
       return (
-        <svg className={common} viewBox="0 0 24 24" fill="none">
-          <path
-            d="M12 3v12"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <path
-            d="M7 8l5-5 5 5"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M5 21h14"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M7 8l5-5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       );
     case "x":
       return (
-        <svg className={common} viewBox="0 0 24 24" fill="none">
-          <path
-            d="M18 6 6 18M6 6l12 12"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       );
     case "check":
       return (
-        <svg className={common} viewBox="0 0 24 24" fill="none">
-          <path
-            d="M20 6 9 17l-5-5"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M20 6 9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case "alert":
       return (
-        <svg className={common} viewBox="0 0 24 24" fill="none">
-          <path
-            d="M12 9v4"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <path
-            d="M12 17h.01"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M12 9v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M12 17h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           <path
             d="M10.3 3.6 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0Z"
             stroke="currentColor"
@@ -303,43 +215,38 @@ function Icon({
       );
     case "chevDown":
       return (
-        <svg className={common} viewBox="0 0 24 24" fill="none">
-          <path
-            d="M6 9l6 6 6-6"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case "chevUp":
       return (
-        <svg className={common} viewBox="0 0 24 24" fill="none">
-          <path
-            d="M18 15l-6-6-6 6"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M18 15l-6-6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case "video":
       return (
-        <svg className={common} viewBox="0 0 24 24" fill="none">
+        <svg className={c} viewBox="0 0 24 24" fill="none">
           <path
             d="M15 10.5V7a2 2 0 0 0-2-2H5A2 2 0 0 0 3 7v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3.5"
             stroke="currentColor"
             strokeWidth="2"
             strokeLinejoin="round"
           />
-          <path
-            d="M15 12l6-4v8l-6-4Z"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
+          <path d="M15 12l6-4v8l-6-4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+        </svg>
+      );
+    case "filter":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M4 6h16M7 12h10M10 18h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case "spark":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M12 2l1.6 6.2L20 10l-6.4 1.8L12 18l-1.6-6.2L4 10l6.4-1.8L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
         </svg>
       );
     default:
@@ -347,16 +254,11 @@ function Icon({
   }
 }
 
-function Badge({
-  children,
-  tone = "neutral",
-}: {
-  children: React.ReactNode;
-  tone?: "neutral" | "blue" | "green" | "amber" | "red";
-}) {
-  return (
-    <span className={clsx("badge", `badge-${tone}`)}>{children}</span>
-  );
+// =====================
+// Small UI
+// =====================
+function Chip({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "ok" | "warn" | "danger" | "info" }) {
+  return <span className={clsx("chip", `chip-${tone}`)}>{children}</span>;
 }
 
 function Toast({
@@ -377,14 +279,12 @@ function Toast({
       role="status"
       aria-live="polite"
     >
-      <div className="toast-icon">
-        {kind === "success" ? <Icon name="check" /> : <Icon name="alert" />}
-      </div>
+      <div className="toast-ic">{kind === "success" ? <Icon name="check" /> : <Icon name="alert" />}</div>
       <div className="toast-body">
         <div className="toast-title">{kind === "success" ? "Готово" : "Ошибка"}</div>
         <div className="toast-msg">{message}</div>
       </div>
-      <button className="icon-btn" onClick={onClose} aria-label="Закрыть">
+      <button className="iconBtn" onClick={onClose} aria-label="Закрыть">
         <Icon name="x" />
       </button>
     </motion.div>
@@ -410,7 +310,7 @@ function Modal({
     <AnimatePresence>
       {open && (
         <motion.div
-          className="modal-backdrop"
+          className="modalBackdrop"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -419,19 +319,19 @@ function Modal({
           }}
         >
           <motion.div
-            className={clsx("modal", wide && "modal-wide")}
+            className={clsx("modal", wide && "modalWide")}
             initial={{ opacity: 0, y: 12, scale: 0.99 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.99 }}
           >
-            <div className="modal-head">
-              <div className="modal-title">{title}</div>
-              <button className="icon-btn" onClick={onClose} aria-label="Закрыть">
+            <div className="modalHead">
+              <div className="modalTitle">{title}</div>
+              <button className="iconBtn" onClick={onClose} aria-label="Закрыть">
                 <Icon name="x" />
               </button>
             </div>
-            <div className="modal-body">{children}</div>
-            {footer && <div className="modal-foot">{footer}</div>}
+            <div className="modalBody">{children}</div>
+            {footer && <div className="modalFoot">{footer}</div>}
           </motion.div>
         </motion.div>
       )}
@@ -462,17 +362,13 @@ function ConfirmDialog({
     <Modal
       open={open}
       title={title}
-      onClose={busy ? () => {} : onCancel}
+      onClose={busy ? () => { } : onCancel}
       footer={
-        <div className="row row-end gap-8">
-          <button className="btn btn-ghost" onClick={onCancel} disabled={busy}>
+        <div className="row rowEnd gap8">
+          <button className="btn btnGhost" onClick={onCancel} disabled={busy}>
             Отмена
           </button>
-          <button
-            className={clsx("btn", danger ? "btn-danger" : "btn-primary")}
-            onClick={onConfirm}
-            disabled={busy}
-          >
+          <button className={clsx("btn", danger ? "btnDanger" : "btnPrimary")} onClick={onConfirm} disabled={busy}>
             {busy ? "Подождите..." : confirmText}
           </button>
         </div>
@@ -496,20 +392,22 @@ function Field({
 }) {
   return (
     <div className="field">
-      <div className="field-top">
-        <div className="field-label">{label}</div>
-        {hint ? <div className="field-hint">{hint}</div> : null}
+      <div className="fieldTop">
+        <div className="fieldLabel">{label}</div>
+        {hint ? <div className="fieldHint">{hint}</div> : null}
       </div>
       {children}
-      {error ? <div className="field-error">{error}</div> : null}
+      {error ? <div className="fieldError">{error}</div> : null}
     </div>
   );
 }
 
 // =====================
-// Main
+// Main Admin
 // =====================
 export default function Admin() {
+  const navigate = useNavigate();
+
   // data
   const [rows, setRows] = useState<PostRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -532,8 +430,8 @@ export default function Admin() {
   const [toastSuccess, setToastSuccess] = useState("");
   const [toastError, setToastError] = useState("");
 
-  // create drawer-ish
-  const [createOpen, setCreateOpen] = useState(true);
+  // drawer (create)
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [region, setRegion] = useState("naryn");
@@ -601,7 +499,6 @@ export default function Admin() {
       return () => clearTimeout(t);
     }
   }, [toastSuccess]);
-
   useEffect(() => {
     if (toastError) {
       const t = setTimeout(() => setToastError(""), 5200);
@@ -630,14 +527,15 @@ export default function Admin() {
     const arr = [...filtered];
     arr.sort((a, b) => {
       const dir = sort.direction === "asc" ? 1 : -1;
-      const ka = a[sort.key] as any;
-      const kb = b[sort.key] as any;
 
       if (sort.key === "created_at") {
         const ta = new Date(a.created_at).getTime();
         const tb = new Date(b.created_at).getTime();
         return ta < tb ? -1 * dir : ta > tb ? 1 * dir : 0;
       }
+
+      const ka = a[sort.key] as any;
+      const kb = b[sort.key] as any;
 
       const va = (ka ?? "") as string | number;
       const vb = (kb ?? "") as string | number;
@@ -662,7 +560,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (currentPage > pageCount) setCurrentPage(pageCount);
-  }, [pageCount]);
+  }, [pageCount, currentPage]);
 
   // sort helper
   const requestSort = (key: SortKey) => {
@@ -670,12 +568,23 @@ export default function Admin() {
       if (prev.key === key) {
         return { key, direction: prev.direction === "asc" ? "desc" : "asc" };
       }
-      // sensible defaults
-      const direction: "asc" | "desc" =
-        key === "id" || key === "created_at" ? "desc" : "asc";
+      const direction: "asc" | "desc" = key === "id" || key === "created_at" ? "desc" : "asc";
       return { key, direction };
     });
   };
+
+  // stats
+  const stats = useMemo(() => {
+    const total = rows.length;
+    const withVideo = rows.filter((r) => !!r.video_file).length;
+    const byRegion: Record<string, number> = {};
+    for (const r of rows) {
+      const key = r.region || "unknown";
+      byRegion[key] = (byRegion[key] || 0) + 1;
+    }
+    const topRegion = Object.entries(byRegion).sort((a, b) => b[1] - a[1])[0]?.[0] || "—";
+    return { total, withVideo, topRegion };
+  }, [rows]);
 
   // create validation
   const validateCreateForm = () => {
@@ -748,7 +657,6 @@ export default function Admin() {
 
       if (!result.ok) throw new Error(result.body?.error || `Upload failed (status ${result.status})`);
 
-      // reset form
       setTitle("");
       setContent("");
       setFact("");
@@ -757,6 +665,7 @@ export default function Admin() {
       setUploadPct(0);
       setFormErrors({});
       setToastSuccess("Пост создан!");
+      setDrawerOpen(false);
 
       await load();
     } catch (e: any) {
@@ -966,346 +875,185 @@ export default function Admin() {
 
   const logout = async () => {
     await supabase.auth.signOut();
-    window.location.href = "/KG/login";
+    // Для HashRouter:
+    navigate("/login", { replace: true });
   };
 
-  // quick stats
-  const stats = useMemo(() => {
-    const total = rows.length;
-    const withVideo = rows.filter((r) => !!r.video_file).length;
-    const byRegion: Record<string, number> = {};
-    for (const r of rows) {
-      const key = r.region || "unknown";
-      byRegion[key] = (byRegion[key] || 0) + 1;
-    }
-    const topRegion = Object.entries(byRegion).sort((a, b) => b[1] - a[1])[0]?.[0] || "—";
-    return { total, withVideo, topRegion };
-  }, [rows]);
-
   const SortIndicator = ({ k }: { k: SortKey }) => {
-    if (sort.key !== k) return <span className="sort-ind">·</span>;
+    if (sort.key !== k) return <span className="sortInd">·</span>;
     return sort.direction === "asc" ? (
-      <span className="sort-ind">
+      <span className="sortInd">
         <Icon name="chevUp" />
       </span>
     ) : (
-      <span className="sort-ind">
+      <span className="sortInd">
         <Icon name="chevDown" />
       </span>
     );
   };
 
   return (
-    <div className="page">
-      <style></style>
-
+    <div className="adm">
       {/* Topbar */}
-      <div className="topbar">
-        <div className="topbar-inner">
+      <div className="admTop">
+        <div className="admTopIn">
           <div className="brand">
-            <div className="brand-badge">KG</div>
-            <div>
-              <div className="brand-title">Admin</div>
-              <div className="brand-sub">Posts • Supabase • Worker</div>
+            <div className="brandLogo">
+              <Icon name="spark" className="i-18" />
+            </div>
+            <div className="brandTxt">
+              <div className="brandTitle">KG Admin</div>
+              <div className="brandSub">Posts • Supabase • Worker API</div>
             </div>
           </div>
 
-          <div className="top-actions">
-            <button className="btn btn-ghost" onClick={() => setCreateOpen((v) => !v)} disabled={isBusy}>
-              <Icon name="plus" />
-              Создать
+          <div className="topActions">
+            <button className="btn btnPrimary" onClick={() => setDrawerOpen(true)} disabled={isBusy}>
+              <Icon name="plus" /> Новый пост
             </button>
-            <button className="btn btn-ghost" onClick={load} disabled={isBusy}>
-              <Icon name="refresh" />
-              Обновить
+            <button className="btn btnGhost" onClick={load} disabled={isBusy}>
+              <Icon name="refresh" /> Обновить
             </button>
-            <button className="btn btn-danger" onClick={logout} disabled={isBusy}>
-              <Icon name="logout" />
-              Выйти
+            <button className="btn btnDanger" onClick={logout} disabled={isBusy}>
+              <Icon name="logout" /> Выйти
             </button>
           </div>
         </div>
       </div>
 
-      <div className="layout">
-        {/* Left column */}
-        <div className="col">
-          <div className="card">
-            <div className="card-head">
+      {/* Main layout */}
+      <div className="admBody">
+        {/* Left panel */}
+        <aside className="panel">
+          <div className="panelCard">
+            <div className="panelHead">
               <div>
-                <div className="card-title">Обзор</div>
-                <div className="muted">Быстрые цифры и состояние системы</div>
+                <div className="h2">Обзор</div>
+                <div className="muted">Фильтры, статусы, статистика</div>
+              </div>
+              <Chip tone={WORKER_BASE_URL ? "ok" : "danger"}>{WORKER_BASE_URL ? "Worker OK" : "NO WORKER"}</Chip>
+            </div>
+
+            <div className="kpis">
+              <div className="kpi">
+                <div className="kpiLabel">Всего</div>
+                <div className="kpiVal">{stats.total}</div>
+              </div>
+              <div className="kpi">
+                <div className="kpiLabel">С видео</div>
+                <div className="kpiVal">{stats.withVideo}</div>
+              </div>
+              <div className="kpi">
+                <div className="kpiLabel">Топ регион</div>
+                <div className="kpiVal">{regionLabel(stats.topRegion)}</div>
               </div>
             </div>
 
-            <div className="stats">
-              <div className="stat">
-                <div className="stat-label">Всего постов</div>
-                <div className="stat-value">{stats.total}</div>
-              </div>
-              <div className="stat">
-                <div className="stat-label">С видео</div>
-                <div className="stat-value">{stats.withVideo}</div>
-              </div>
-              <div className="stat">
-                <div className="stat-label">Топ регион</div>
-                <div className="stat-value">{regionLabel(stats.topRegion)}</div>
-              </div>
-            </div>
+            <div className="sep" />
 
-            <div className="divider" />
+            <div className="searchBox">
+              <Icon name="search" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="inputPlain"
+                placeholder="Поиск: title / content / fact"
+              />
+            </div>
 
             <div className="filters">
-              <div className="search">
-                <Icon name="search" className="w-4 h-4" />
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Поиск: title / content / fact"
-                  className="input input-plain"
-                />
+              <div className="fRow">
+                <div className="fLabel">
+                  <Icon name="filter" /> Регион
+                </div>
+                <select className="select" value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)}>
+                  <option value="all">Все</option>
+                  {REGIONS.map((r) => (
+                    <option key={r.v} value={r.v}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div className="grid2">
-                <div>
-                  <div className="label">Регион</div>
-                  <select className="select" value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)}>
-                    <option value="all">Все</option>
-                    {REGIONS.map((r) => (
-                      <option key={r.v} value={r.v}>
-                        {r.label}
-                      </option>
-                    ))}
-                  </select>
+              <div className="fRow">
+                <div className="fLabel">
+                  <Icon name="filter" /> Сезон
                 </div>
-                <div>
-                  <div className="label">Сезон</div>
-                  <select className="select" value={seasonFilter} onChange={(e) => setSeasonFilter(e.target.value)}>
-                    <option value="all">Все</option>
-                    {SEASONS.map((s) => (
-                      <option key={s.v} value={s.v}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <select className="select" value={seasonFilter} onChange={(e) => setSeasonFilter(e.target.value)}>
+                  <option value="all">Все</option>
+                  {SEASONS.map((s) => (
+                    <option key={s.v} value={s.v}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div className="row gap-8 wrap">
-                <Badge tone="neutral">Найдено: {sorted.length}</Badge>
-                <Badge tone={WORKER_BASE_URL ? "green" : "red"}>
-                  Worker: {WORKER_BASE_URL ? "OK" : "нет VITE_WORKER_BASE_URL"}
-                </Badge>
-                <Badge tone="blue">JWT: через Supabase</Badge>
+              <div className="fMeta">
+                <Chip tone="info">Найдено: {sorted.length}</Chip>
+                <Chip tone="neutral">Стр: {currentPage}/{pageCount}</Chip>
               </div>
             </div>
           </div>
 
-          {/* Create panel */}
-          <AnimatePresence initial={false}>
-            {createOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
-                className="card"
-              >
-                <div className="card-head">
-                  <div>
-                    <div className="card-title">Новый пост</div>
-                    <div className="muted">Стиль как у GitHub: чисто, строго, быстро</div>
-                  </div>
-                  <button className="icon-btn" onClick={() => setCreateOpen(false)} aria-label="Свернуть">
-                    <Icon name="x" />
-                  </button>
-                </div>
+          <div className="panelHint">
+            <div className="muted">
+              💡 Совет: на GitHub Pages лучше использовать HashRouter — у тебя уже работает{" "}
+              <span className="mono">#/admin</span>.
+            </div>
+          </div>
+        </aside>
 
-                <div className="form">
-                  <div className="grid2">
-                    <Field label="Заголовок" error={formErrors.title}>
-                      <input
-                        className="input"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="Например: Озеро Сон-Куль"
-                        disabled={isBusy}
-                      />
-                    </Field>
-
-                    <Field label="Факт (1 строка)" error={formErrors.fact} hint="Коротко, как тэглайн">
-                      <input
-                        className="input"
-                        value={fact}
-                        onChange={(e) => setFact(e.target.value)}
-                        placeholder="Например: Самое высокогорное озеро..."
-                        disabled={isBusy}
-                      />
-                    </Field>
-                  </div>
-
-                  <Field label="Содержание" error={formErrors.content} hint="Можно длинный текст">
-                    <textarea
-                      className="textarea"
-                      value={content}
-                      onChange={(e) => setContent(e.target.value)}
-                      placeholder="Текст поста..."
-                      disabled={isBusy}
-                    />
-                  </Field>
-
-                  <div className="grid3">
-                    <Field label="Регион" error={formErrors.region}>
-                      <select className="select" value={region} onChange={(e) => setRegion(e.target.value)} disabled={isBusy}>
-                        {REGIONS.map((r) => (
-                          <option key={r.v} value={r.v}>
-                            {r.label}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-
-                    <Field label="Сезон" error={formErrors.season}>
-                      <select className="select" value={season} onChange={(e) => setSeason(e.target.value)} disabled={isBusy}>
-                        {SEASONS.map((s) => (
-                          <option key={s.v} value={s.v}>
-                            {s.label}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-
-                    <Field label="Ссылка на карту" hint="Опционально">
-                      <input
-                        className="input"
-                        value={mapUrl}
-                        onChange={(e) => setMapUrl(e.target.value)}
-                        placeholder="https://..."
-                        disabled={isBusy}
-                      />
-                    </Field>
-                  </div>
-
-                  <div className="uploader">
-                    <div className="uploader-head">
-                      <div className="row gap-8">
-                        <Icon name="video" />
-                        <div>
-                          <div className="uploader-title">Видео</div>
-                          <div className="muted">mp4 / webm / mov • до 200MB</div>
-                        </div>
-                      </div>
-
-                      {file ? (
-                        <Badge tone="green">
-                          {file.name} • {humanFileSize(file.size)}
-                        </Badge>
-                      ) : (
-                        <Badge tone="amber">Файл не выбран</Badge>
-                      )}
-                    </div>
-
-                    <div className="row gap-8 wrap">
-                      <label className={clsx("btn btn-ghost", isBusy && "btn-disabled")}>
-                        <input
-                          type="file"
-                          accept="video/mp4,video/webm,video/quicktime"
-                          onChange={(e) => setFile(e.target.files?.[0] || null)}
-                          disabled={isBusy}
-                          style={{ display: "none" }}
-                        />
-                        <Icon name="upload" />
-                        Выбрать файл
-                      </label>
-
-                      {file && (
-                        <button className="btn btn-ghost" onClick={() => setFile(null)} disabled={isBusy}>
-                          <Icon name="x" />
-                          Очистить
-                        </button>
-                      )}
-                    </div>
-
-                    {formErrors.file && <div className="field-error">{formErrors.file}</div>}
-
-                    {uploadingCreate && (
-                      <div className="progress-wrap">
-                        <div className="row row-between">
-                          <div className="muted">Загрузка… {uploadPct}%</div>
-                          <button className="btn btn-danger btn-sm" onClick={cancelUpload}>
-                            Отмена
-                          </button>
-                        </div>
-                        <progress className="progress" value={uploadPct} max={100} />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="row row-between wrap">
-                    <div className="muted">
-                      <span className="dot" /> Авторизация: JWT • Роль: admin
-                    </div>
-                    <button className="btn btn-primary" onClick={createViaWorker} disabled={isBusy}>
-                      {uploadingCreate ? "Загрузка..." : "Создать пост"}
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Right column: list */}
-        <div className="col col-wide">
+        {/* Right content */}
+        <main className="content">
           <div className="card">
-            <div className="card-head">
+            <div className="cardHead">
               <div>
-                <div className="card-title">Посты</div>
-                <div className="muted">
-                  Таблица в стиле GitHub: сортировка, компактно, быстро
-                </div>
+                <div className="h2">Посты</div>
+                <div className="muted">Сортировка • быстрые действия • адаптив</div>
               </div>
-
-              <div className="row gap-8">
-                <Badge tone="neutral">
-                  Стр. {currentPage} / {pageCount}
-                </Badge>
+              <div className="rightMeta">
+                <Chip tone="neutral">Показано: {paginated.length}</Chip>
               </div>
             </div>
 
             {loading ? (
-              <div className="skeleton">
-                <div className="sk-line" />
-                <div className="sk-line" />
-                <div className="sk-line" />
+              <div className="sk">
+                <div className="skLine" />
+                <div className="skLine" />
+                <div className="skLine" />
+                <div className="skLine" />
               </div>
             ) : (
               <>
-                <div className="table-wrap">
+                {/* Desktop table */}
+                <div className="tableWrap">
                   <table className="table">
                     <thead>
                       <tr>
                         <th>
-                          <button className="th-btn" onClick={() => requestSort("id")}>
+                          <button className="thBtn" onClick={() => requestSort("id")}>
                             ID <SortIndicator k="id" />
                           </button>
                         </th>
                         <th>
-                          <button className="th-btn" onClick={() => requestSort("created_at")}>
+                          <button className="thBtn" onClick={() => requestSort("created_at")}>
                             Дата <SortIndicator k="created_at" />
                           </button>
                         </th>
                         <th>
-                          <button className="th-btn" onClick={() => requestSort("title")}>
+                          <button className="thBtn" onClick={() => requestSort("title")}>
                             Заголовок <SortIndicator k="title" />
                           </button>
                         </th>
-                        <th className="hide-sm">
-                          <button className="th-btn" onClick={() => requestSort("region")}>
+                        <th className="hideSm">
+                          <button className="thBtn" onClick={() => requestSort("region")}>
                             Регион <SortIndicator k="region" />
                           </button>
                         </th>
-                        <th className="hide-sm">
-                          <button className="th-btn" onClick={() => requestSort("season")}>
+                        <th className="hideSm">
+                          <button className="thBtn" onClick={() => requestSort("season")}>
                             Сезон <SortIndicator k="season" />
                           </button>
                         </th>
@@ -1323,33 +1071,23 @@ export default function Admin() {
                         paginated.map((row) => (
                           <tr key={row.id}>
                             <td className="mono">#{row.id}</td>
-                            <td className="mono">
-                              {new Date(row.created_at).toLocaleString()}
-                            </td>
+                            <td className="mono">{new Date(row.created_at).toLocaleString()}</td>
                             <td>
-                              <div className="title-cell">
-                                <div className="title-main">{row.title || "—"}</div>
-                                <div className="title-sub">
-                                  <span className="chip">{seasonLabel(row.season)}</span>
-                                  <span className="chip">{regionLabel(row.region)}</span>
-                                  {row.video_file ? (
-                                    <span className="chip chip-ok">video</span>
-                                  ) : (
-                                    <span className="chip chip-warn">no video</span>
-                                  )}
-                                </div>
+                              <div className="tTitle">{row.title || "—"}</div>
+                              <div className="tSub">
+                                <Chip tone="neutral">{seasonLabel(row.season)}</Chip>
+                                <Chip tone="neutral">{regionLabel(row.region)}</Chip>
+                                <Chip tone={row.video_file ? "ok" : "warn"}>{row.video_file ? "video" : "no video"}</Chip>
                               </div>
                             </td>
-                            <td className="hide-sm">{regionLabel(row.region)}</td>
-                            <td className="hide-sm">{seasonLabel(row.season)}</td>
+                            <td className="hideSm">{regionLabel(row.region)}</td>
+                            <td className="hideSm">{seasonLabel(row.season)}</td>
                             <td className="actions">
-                              <button className="btn btn-ghost btn-sm" onClick={() => startEdit(row)} disabled={isBusy}>
-                                <Icon name="pencil" />
-                                Редакт.
+                              <button className="btn btnGhost btnSm" onClick={() => startEdit(row)} disabled={isBusy}>
+                                <Icon name="pencil" /> Редакт.
                               </button>
-                              <button className="btn btn-danger btn-sm" onClick={() => askDelete(row.id)} disabled={isBusy}>
-                                <Icon name="trash" />
-                                Удалить
+                              <button className="btn btnDanger btnSm" onClick={() => askDelete(row.id)} disabled={isBusy}>
+                                <Icon name="trash" /> Удалить
                               </button>
                             </td>
                           </tr>
@@ -1359,22 +1097,19 @@ export default function Admin() {
                   </table>
                 </div>
 
+                {/* Pager */}
                 <div className="pager">
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                  >
+                  <button className="btn btnGhost btnSm" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>
                     Назад
                   </button>
 
-                  <div className="pager-pages">
+                  <div className="pages">
                     {Array.from({ length: pageCount }, (_, i) => i + 1)
                       .slice(Math.max(0, currentPage - 4), Math.min(pageCount, currentPage + 3))
                       .map((p) => (
                         <button
                           key={p}
-                          className={clsx("page-btn", p === currentPage && "page-btn-active")}
+                          className={clsx("pBtn", p === currentPage && "pBtnA")}
                           onClick={() => setCurrentPage(p)}
                         >
                           {p}
@@ -1382,19 +1117,151 @@ export default function Admin() {
                       ))}
                   </div>
 
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setCurrentPage((p) => Math.min(pageCount, p + 1))}
-                    disabled={currentPage === pageCount}
-                  >
+                  <button className="btn btnGhost btnSm" onClick={() => setCurrentPage((p) => Math.min(pageCount, p + 1))} disabled={currentPage === pageCount}>
                     Вперёд
                   </button>
                 </div>
               </>
             )}
           </div>
-        </div>
+        </main>
       </div>
+
+      {/* Drawer: Create */}
+      <AnimatePresence>
+        {drawerOpen && (
+          <motion.div
+            className="drawerOverlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setDrawerOpen(false);
+            }}
+          >
+            <motion.div
+              className="drawer"
+              initial={{ x: 24, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 24, opacity: 0 }}
+            >
+              <div className="drawerHead">
+                <div>
+                  <div className="h2">Новый пост</div>
+                  <div className="muted">Быстро, чисто, современно</div>
+                </div>
+                <button className="iconBtn" onClick={() => setDrawerOpen(false)} aria-label="Закрыть">
+                  <Icon name="x" />
+                </button>
+              </div>
+
+              <div className="drawerBody">
+                <div className="grid2">
+                  <Field label="Заголовок" error={formErrors.title}>
+                    <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Например: Озеро Сон-Куль" disabled={isBusy} />
+                  </Field>
+
+                  <Field label="Факт (1 строка)" error={formErrors.fact} hint="Коротко, как тэглайн">
+                    <input className="input" value={fact} onChange={(e) => setFact(e.target.value)} placeholder="Например: Самое высокогорное озеро..." disabled={isBusy} />
+                  </Field>
+                </div>
+
+                <Field label="Содержание" error={formErrors.content} hint="Можно длинный текст">
+                  <textarea className="textarea" value={content} onChange={(e) => setContent(e.target.value)} placeholder="Текст поста..." disabled={isBusy} />
+                </Field>
+
+                <div className="grid3">
+                  <Field label="Регион" error={formErrors.region}>
+                    <select className="select" value={region} onChange={(e) => setRegion(e.target.value)} disabled={isBusy}>
+                      {REGIONS.map((r) => (
+                        <option key={r.v} value={r.v}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+
+                  <Field label="Сезон" error={formErrors.season}>
+                    <select className="select" value={season} onChange={(e) => setSeason(e.target.value)} disabled={isBusy}>
+                      {SEASONS.map((s) => (
+                        <option key={s.v} value={s.v}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+
+                  <Field label="Ссылка на карту" hint="Опционально">
+                    <input className="input" value={mapUrl} onChange={(e) => setMapUrl(e.target.value)} placeholder="https://..." disabled={isBusy} />
+                  </Field>
+                </div>
+
+                <div className="uploadCard">
+                  <div className="uploadTop">
+                    <div className="row gap8">
+                      <Icon name="video" />
+                      <div>
+                        <div className="strong">Видео</div>
+                        <div className="muted">mp4 / webm / mov • до 200MB</div>
+                      </div>
+                    </div>
+
+                    {file ? (
+                      <Chip tone="ok">
+                        {file.name} • {humanFileSize(file.size)}
+                      </Chip>
+                    ) : (
+                      <Chip tone="warn">Файл не выбран</Chip>
+                    )}
+                  </div>
+
+                  <div className="row gap8 wrap">
+                    <label className={clsx("btn btnGhost", isBusy && "btnDis")}>
+                      <input
+                        type="file"
+                        accept="video/mp4,video/webm,video/quicktime"
+                        onChange={(e) => setFile(e.target.files?.[0] || null)}
+                        disabled={isBusy}
+                        style={{ display: "none" }}
+                      />
+                      <Icon name="upload" /> Выбрать файл
+                    </label>
+
+                    {file && (
+                      <button className="btn btnGhost" onClick={() => setFile(null)} disabled={isBusy}>
+                        <Icon name="x" /> Очистить
+                      </button>
+                    )}
+                  </div>
+
+                  {formErrors.file && <div className="fieldError">{formErrors.file}</div>}
+
+                  {uploadingCreate && (
+                    <div className="prog">
+                      <div className="row rowBetween">
+                        <div className="muted">Загрузка… {uploadPct}%</div>
+                        <button className="btn btnDanger btnSm" onClick={cancelUpload}>
+                          Отмена
+                        </button>
+                      </div>
+                      <progress className="progress" value={uploadPct} max={100} />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="drawerFoot">
+                <button className="btn btnGhost" onClick={() => setDrawerOpen(false)} disabled={isBusy}>
+                  Отмена
+                </button>
+                <button className="btn btnPrimary" onClick={createViaWorker} disabled={isBusy}>
+                  {uploadingCreate ? "Загрузка..." : "Создать пост"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Edit Modal */}
       <Modal
@@ -1403,122 +1270,112 @@ export default function Admin() {
         onClose={() => (isBusy ? null : cancelEdit())}
         wide
         footer={
-          <div className="row row-between wrap gap-8">
-            <div className="row gap-8 wrap">
-              <button className="btn btn-ghost" onClick={cancelEdit} disabled={isBusy}>
-                Отмена
-              </button>
-            </div>
-            <div className="row gap-8 wrap">
-              <button className="btn btn-primary" onClick={saveEditViaWorker} disabled={isBusy}>
-                {savingText ? "Сохранение..." : "Сохранить"}
-              </button>
-            </div>
+          <div className="row rowBetween wrap gap8">
+            <button className="btn btnGhost" onClick={cancelEdit} disabled={isBusy}>
+              Отмена
+            </button>
+            <button className="btn btnPrimary" onClick={saveEditViaWorker} disabled={isBusy}>
+              {savingText ? "Сохранение..." : "Сохранить"}
+            </button>
           </div>
         }
       >
-        <div className="form">
-          <div className="grid2">
-            <Field label="Заголовок" error={editFormErrors.editTitle}>
-              <input className="input" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} disabled={isBusy} />
-            </Field>
-
-            <Field label="Факт (1 строка)" error={editFormErrors.editFact}>
-              <input className="input" value={editFact} onChange={(e) => setEditFact(e.target.value)} disabled={isBusy} />
-            </Field>
-          </div>
-
-          <Field label="Содержание" error={editFormErrors.editContent}>
-            <textarea className="textarea" value={editContent} onChange={(e) => setEditContent(e.target.value)} disabled={isBusy} />
+        <div className="grid2">
+          <Field label="Заголовок" error={editFormErrors.editTitle}>
+            <input className="input" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} disabled={isBusy} />
           </Field>
 
-          <div className="grid3">
-            <Field label="Регион" error={editFormErrors.editRegion}>
-              <select className="select" value={editRegion} onChange={(e) => setEditRegion(e.target.value)} disabled={isBusy}>
-                {REGIONS.map((r) => (
-                  <option key={r.v} value={r.v}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
+          <Field label="Факт (1 строка)" error={editFormErrors.editFact}>
+            <input className="input" value={editFact} onChange={(e) => setEditFact(e.target.value)} disabled={isBusy} />
+          </Field>
+        </div>
 
-            <Field label="Сезон" error={editFormErrors.editSeason}>
-              <select className="select" value={editSeason} onChange={(e) => setEditSeason(e.target.value)} disabled={isBusy}>
-                {SEASONS.map((s) => (
-                  <option key={s.v} value={s.v}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
+        <Field label="Содержание" error={editFormErrors.editContent}>
+          <textarea className="textarea" value={editContent} onChange={(e) => setEditContent(e.target.value)} disabled={isBusy} />
+        </Field>
 
-            <Field label="Ссылка на карту" hint="Опционально">
-              <input className="input" value={editMapUrl} onChange={(e) => setEditMapUrl(e.target.value)} disabled={isBusy} />
-            </Field>
-          </div>
+        <div className="grid3">
+          <Field label="Регион" error={editFormErrors.editRegion}>
+            <select className="select" value={editRegion} onChange={(e) => setEditRegion(e.target.value)} disabled={isBusy}>
+              {REGIONS.map((r) => (
+                <option key={r.v} value={r.v}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </Field>
 
-          <div className="divider" />
+          <Field label="Сезон" error={editFormErrors.editSeason}>
+            <select className="select" value={editSeason} onChange={(e) => setEditSeason(e.target.value)} disabled={isBusy}>
+              {SEASONS.map((s) => (
+                <option key={s.v} value={s.v}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </Field>
 
-          <div className="card subcard">
-            <div className="row row-between wrap gap-8">
-              <div className="row gap-8">
-                <Icon name="video" />
-                <div>
-                  <div className="subcard-title">Видео</div>
-                  <div className="muted">Текущее: {editVideoFile || "—"}</div>
-                </div>
-              </div>
+          <Field label="Ссылка на карту" hint="Опционально">
+            <input className="input" value={editMapUrl} onChange={(e) => setEditMapUrl(e.target.value)} disabled={isBusy} />
+          </Field>
+        </div>
 
-              <div className="row gap-8 wrap">
-                <label className={clsx("btn btn-ghost btn-sm", isBusy && "btn-disabled")}>
-                  <input
-                    type="file"
-                    accept="video/mp4,video/webm,video/quicktime"
-                    onChange={(e) => setEditFile(e.target.files?.[0] || null)}
-                    disabled={isBusy}
-                    style={{ display: "none" }}
-                  />
-                  <Icon name="upload" />
-                  Выбрать
-                </label>
+        <div className="sep" />
 
-                <button className="btn btn-primary btn-sm" onClick={replaceVideoViaWorker} disabled={isBusy || !editFile}>
-                  {uploadingVideo ? "Загрузка..." : "Заменить"}
-                </button>
-
-                {editFile && (
-                  <button className="btn btn-ghost btn-sm" onClick={() => setEditFile(null)} disabled={isBusy}>
-                    <Icon name="x" />
-                    Сброс
-                  </button>
-                )}
+        <div className="uploadCard">
+          <div className="uploadTop">
+            <div className="row gap8">
+              <Icon name="video" />
+              <div>
+                <div className="strong">Видео</div>
+                <div className="muted">Текущее: {editVideoFile || "—"}</div>
               </div>
             </div>
 
-            {editFile && (
-              <div className="row row-between wrap gap-8 mt-10">
-                <Badge tone="neutral">
-                  {editFile.name} • {humanFileSize(editFile.size)}
-                </Badge>
-                <Badge tone={validateVideoFile(editFile) ? "red" : "green"}>
-                  {validateVideoFile(editFile) ? "Не валидно" : "Ок"}
-                </Badge>
-              </div>
-            )}
+            <div className="row gap8 wrap">
+              <label className={clsx("btn btnGhost btnSm", isBusy && "btnDis")}>
+                <input
+                  type="file"
+                  accept="video/mp4,video/webm,video/quicktime"
+                  onChange={(e) => setEditFile(e.target.files?.[0] || null)}
+                  disabled={isBusy}
+                  style={{ display: "none" }}
+                />
+                <Icon name="upload" /> Выбрать
+              </label>
 
-            {uploadingVideo && (
-              <div className="progress-wrap mt-10">
-                <div className="row row-between">
-                  <div className="muted">Загрузка… {editUploadPct}%</div>
-                  <button className="btn btn-danger btn-sm" onClick={cancelEditUpload}>
-                    Отмена
-                  </button>
-                </div>
-                <progress className="progress" value={editUploadPct} max={100} />
-              </div>
-            )}
+              <button className="btn btnPrimary btnSm" onClick={replaceVideoViaWorker} disabled={isBusy || !editFile}>
+                {uploadingVideo ? "Загрузка..." : "Заменить"}
+              </button>
+
+              {editFile && (
+                <button className="btn btnGhost btnSm" onClick={() => setEditFile(null)} disabled={isBusy}>
+                  <Icon name="x" /> Сброс
+                </button>
+              )}
+            </div>
           </div>
+
+          {editFile && (
+            <div className="row rowBetween wrap gap8 mt8">
+              <Chip tone="neutral">
+                {editFile.name} • {humanFileSize(editFile.size)}
+              </Chip>
+              <Chip tone={validateVideoFile(editFile) ? "danger" : "ok"}>{validateVideoFile(editFile) ? "Не валидно" : "Ок"}</Chip>
+            </div>
+          )}
+
+          {uploadingVideo && (
+            <div className="prog mt8">
+              <div className="row rowBetween">
+                <div className="muted">Загрузка… {editUploadPct}%</div>
+                <button className="btn btnDanger btnSm" onClick={cancelEditUpload}>
+                  Отмена
+                </button>
+              </div>
+              <progress className="progress" value={editUploadPct} max={100} />
+            </div>
+          )}
         </div>
       </Modal>
 
@@ -1541,9 +1398,7 @@ export default function Admin() {
       {/* Toasts */}
       <div className="toasts">
         <AnimatePresence>
-          {toastSuccess && (
-            <Toast kind="success" message={toastSuccess} onClose={() => setToastSuccess("")} />
-          )}
+          {toastSuccess && <Toast kind="success" message={toastSuccess} onClose={() => setToastSuccess("")} />}
         </AnimatePresence>
         <AnimatePresence>
           {toastError && <Toast kind="error" message={toastError} onClose={() => setToastError("")} />}
