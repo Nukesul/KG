@@ -1,3 +1,5 @@
+import React from "react";
+
 type Props = {
   activeRegion?: string | null;
   mapUrl?: string | null;
@@ -19,8 +21,11 @@ export default function KyrgyzstanMap({ activeRegion, mapUrl, onSelectRegion }: 
     }
   };
 
+  // ⚠️ ВАЖНО: в твоих path УБЕРИ fill/stroke атрибуты.
+  // CSS ниже управляет цветами. Иначе подсветка может глючить.
+
   return (
-    <div className="kg-map" data-active={a || ""} aria-label="Карта Кыргызстана">
+    <div className="kg-map" data-active={a || ""} aria-label="Карта Кыргызстана" onClick={(e) => e.stopPropagation()}>
       <div className="kg-map-header">
         <span className="kg-map-title">Карта</span>
         {mapUrl ? (
@@ -31,7 +36,7 @@ export default function KyrgyzstanMap({ activeRegion, mapUrl, onSelectRegion }: 
       </div>
 
       <svg className="kg-map-svg" viewBox="0 0 800 450" role="img" aria-label="Кыргызстан" preserveAspectRatio="xMidYMid meet">
-        <g className="kg-regions" aria-label="Области Кыргызстана">
+           <g className="kg-regions" aria-label="Области Кыргызстана">
           {/* ВАЖНО: в твоих path УБЕРИ fill/stroke, иначе CSS не сработает нормально */}
 
           {/* Batken */}

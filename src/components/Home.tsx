@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import Tippy from "@tippyjs/react";
 import "tippy.js/dist/tippy.css";
 
@@ -81,19 +81,13 @@ export default function Home() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [scrollProgress, setScrollProgress] = useState(0);
 
-  const [cinemaHintVisible, setCinemaHintVisible] = useState(false);
-
   const videoRef = useRef<HTMLVideoElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // timers
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cinemaHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // interaction lock (don’t autohide while interacting)
   const interactingRef = useRef(false);
 
-  // throttle UI show to avoid pointermove lag (setState spam)
+  // pointer-move throttling
   const rafRef = useRef<number | null>(null);
   const lastShowTsRef = useRef<number>(0);
 
@@ -128,7 +122,6 @@ export default function Home() {
     return f.endsWith(".webm") ? "video/webm" : "video/mp4";
   }, [current?.video_file]);
 
-  // theme
   const theme = useMemo(() => {
     if (!current) return "t1";
     return ["t1", "t2", "t3", "t4"][current.id % 4];
@@ -142,18 +135,19 @@ export default function Home() {
   }, []);
 
   const scheduleAutoHide = useCallback(() => {
+    // в cinema UI не нужен
     if (cinema || needsTapToStart) return;
 
     clearHideTimer();
     hideTimerRef.current = setTimeout(() => {
       if (interactingRef.current) return;
       setUiVisible(false);
-    }, 3200); // чуть быстрее и “резче”, без ощущения лагов
+    }, 3000);
   }, [cinema, needsTapToStart, clearHideTimer]);
 
   const showUI = useCallback(
     (autoHide = true) => {
-      if (cinema) return;
+      if (cinema) return; // в cinema UI спрятан
       setUiVisible(true);
       clearHideTimer();
       if (autoHide) scheduleAutoHide();
@@ -161,10 +155,9 @@ export default function Home() {
     [cinema, scheduleAutoHide, clearHideTimer]
   );
 
-  // Smooth showUI on pointer move (throttled)
   const onPointerActivity = useCallback(() => {
+    if (cinema) return; // в cinema не показываем UI, а выход делаем кликом (см. onRootClick)
     const now = performance.now();
-    // limit to ~7 calls/sec
     if (now - lastShowTsRef.current < 140) return;
     lastShowTsRef.current = now;
 
@@ -173,7 +166,7 @@ export default function Home() {
       rafRef.current = null;
       showUI(true);
     });
-  }, [showUI]);
+  }, [cinema, showUI]);
 
   const tryPlay = useCallback(async () => {
     const v = videoRef.current;
@@ -202,23 +195,14 @@ export default function Home() {
       scheduleAutoHide();
 
       setCurrent(m);
-
-      // reset progress quickly (no fancy fade timers)
       setVideoProgress(0);
-
-      // ensure reload/play smoothly
-      const v = videoRef.current;
-      if (v) {
-        // The key on <video> will remount, but for safety:
-        // v.load();  // optional, sometimes causes extra stutter; rely on key instead.
-        // tryPlay triggered by effect below
-      }
+      // video перерисуется (key), а tryPlay вызовется из onCanPlay/эффекта
     },
     [current, scheduleAutoHide]
   );
 
-  // Map click -> choose post like months buttons
-  // If already on same region, cycle to next post in that region.
+  // Map click -> choose post like months buttons.
+  // If already on same region, cycle within that region.
   const selectByRegion = useCallback(
     (regionId: string) => {
       const r = (regionId || "").toLowerCase();
@@ -227,7 +211,6 @@ export default function Home() {
       const candidates = months.filter((p) => (p.region || "").toLowerCase() === r);
       if (candidates.length === 0) return;
 
-      // if current already in region -> next candidate
       if (current && (current.region || "").toLowerCase() === r) {
         const idx = candidates.findIndex((p) => p.id === current.id);
         const next = candidates[(idx + 1) % candidates.length];
@@ -235,19 +218,26 @@ export default function Home() {
         return;
       }
 
-      // else pick first candidate (by id order)
       changeMonth(candidates[0]);
     },
     [months, current, changeMonth]
   );
 
-  const onEnded = useCallback(() => {
-    if (!months.length || !current || isPaused) return;
+  const goNext = useCallback(() => {
+    if (!months.length || !current) return;
     const idx = months.findIndex((x) => x.id === current.id);
     if (idx === -1) return;
     const next = months[(idx + 1) % months.length];
     if (next) changeMonth(next);
-  }, [months, current, isPaused, changeMonth]);
+  }, [months, current, changeMonth]);
+
+  const goPrev = useCallback(() => {
+    if (!months.length || !current) return;
+    const idx = months.findIndex((x) => x.id === current.id);
+    if (idx === -1) return;
+    const prev = months[idx === 0 ? months.length - 1 : idx - 1];
+    if (prev) changeMonth(prev);
+  }, [months, current, changeMonth]);
 
   const togglePause = useCallback(() => {
     const v = videoRef.current;
@@ -274,24 +264,29 @@ export default function Home() {
   const toggleCinema = useCallback(() => {
     setCinema((prev) => {
       const next = !prev;
-
-      if (cinemaHintTimerRef.current) clearTimeout(cinemaHintTimerRef.current);
-
       if (next) {
         setUiVisible(false);
         clearHideTimer();
-
-        setCinemaHintVisible(true);
-        cinemaHintTimerRef.current = setTimeout(() => setCinemaHintVisible(false), 1200);
       } else {
-        setCinemaHintVisible(false);
         setUiVisible(true);
-        showUI(true);
+        scheduleAutoHide();
       }
-
       return next;
     });
-  }, [showUI, clearHideTimer]);
+  }, [clearHideTimer, scheduleAutoHide]);
+
+  // Root click behavior:
+  // - if cinema: any click exits cinema (simple!)
+  // - else: show UI
+  const onRootClick = useCallback(() => {
+    if (cinema) {
+      setCinema(false);
+      setUiVisible(true);
+      scheduleAutoHide();
+      return;
+    }
+    showUI(true);
+  }, [cinema, scheduleAutoHide, showUI]);
 
   // Keyboard
   useEffect(() => {
@@ -307,50 +302,29 @@ export default function Home() {
         case "KeyC":
           toggleCinema();
           break;
-        case "ArrowRight": {
-          if (!current) return;
-          const idx = months.findIndex((m) => m.id === current.id);
-          if (idx === -1) return;
-          const next = months[(idx + 1) % months.length];
-          if (next) changeMonth(next);
+        case "ArrowRight":
+          goNext();
           break;
-        }
-        case "ArrowLeft": {
-          if (!current) return;
-          const idx = months.findIndex((m) => m.id === current.id);
-          if (idx === -1) return;
-          const prev = months[idx === 0 ? months.length - 1 : idx - 1];
-          if (prev) changeMonth(prev);
+        case "ArrowLeft":
+          goPrev();
           break;
-        }
+        case "Escape":
+          if (cinema) {
+            setCinema(false);
+            setUiVisible(true);
+            scheduleAutoHide();
+          }
+          break;
       }
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [togglePause, toggleMuted, toggleCinema, changeMonth, months, current]);
-
-  // Video progress + ended
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-
-    const updateProgress = () => {
-      if (v.duration > 0) setVideoProgress((v.currentTime / v.duration) * 100);
-    };
-
-    v.addEventListener("timeupdate", updateProgress);
-    v.addEventListener("ended", onEnded);
-
-    return () => {
-      v.removeEventListener("timeupdate", updateProgress);
-      v.removeEventListener("ended", onEnded);
-    };
-  }, [onEnded]);
+  }, [togglePause, toggleMuted, toggleCinema, goNext, goPrev, cinema, scheduleAutoHide]);
 
   // Autoplay on current change
   useEffect(() => {
-    if (!current || !videoRef.current) return;
+    if (!current) return;
     tryPlay();
   }, [current, tryPlay]);
 
@@ -371,7 +345,7 @@ export default function Home() {
     return () => el.removeEventListener("scroll", updateScroll);
   }, [months]);
 
-  // Center active month button
+  // Center active month
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el || !current) return;
@@ -385,7 +359,6 @@ export default function Home() {
   useEffect(() => {
     return () => {
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-      if (cinemaHintTimerRef.current) clearTimeout(cinemaHintTimerRef.current);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, []);
@@ -414,9 +387,8 @@ export default function Home() {
   };
 
   return (
-    <div className={`fs-shell ${theme} ${cinema ? "cinema" : ""}`} onPointerMove={onPointerActivity} onClick={() => showUI(true)}>
+    <div className={`fs-shell ${theme} ${cinema ? "cinema" : ""}`} onPointerMove={onPointerActivity} onClick={onRootClick}>
       <div className="video-layer">
-        {/* Делает смену видео стабильнее: remount видео по current.id */}
         <AnimatePresence mode="wait">
           <motion.div
             key={`video-wrap-${current.id}`}
@@ -424,7 +396,7 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.28, ease: "easeOut" }}
+            transition={{ duration: 0.26, ease: "easeOut" }}
             style={{ position: "absolute", inset: 0 }}
           >
             <video
@@ -433,8 +405,17 @@ export default function Home() {
               muted={muted}
               playsInline
               preload="metadata"
-              onCanPlay={tryPlay}
               autoPlay
+              onCanPlay={tryPlay}
+              // ✅ FIX: автопереход гарантированно работает
+              onEnded={() => {
+                if (!isPaused) goNext();
+              }}
+              onTimeUpdate={() => {
+                const v = videoRef.current;
+                if (!v || !v.duration) return;
+                setVideoProgress((v.currentTime / v.duration) * 100);
+              }}
             >
               {videoSrc && <source src={videoSrc} type={videoType} />}
             </video>
@@ -450,24 +431,12 @@ export default function Home() {
         </div>
       </div>
 
-      <header
-        className={`header ${uiVisible && !cinema ? "" : "hidden-ui"}`}
-        onPointerEnter={onUIEnter}
-        onPointerLeave={onUILeave}
-        onFocusCapture={onUIEnter}
-        onBlurCapture={onUILeave}
-      >
+      <header className={`header ${uiVisible && !cinema ? "" : "hidden-ui"}`} onPointerEnter={onUIEnter} onPointerLeave={onUILeave}>
         <img src={logo} alt="Кыргызстан" className="logo" />
       </header>
 
-      {/* Карта всегда видна; клик по областям переключает пост */}
-      <div
-        className={`map-slot ${cinema ? "cinema-hidden" : ""}`}
-        onPointerEnter={onUIEnter}
-        onPointerLeave={onUILeave}
-        onFocusCapture={onUIEnter}
-        onBlurCapture={onUILeave}
-      >
+      {/* Карта всегда видна; клики не должны “вылетать” в root */}
+      <div className={`map-slot ${cinema ? "cinema-hidden" : ""}`} onPointerEnter={onUIEnter} onPointerLeave={onUILeave}>
         <KyrgyzstanMap activeRegion={activeRegion} mapUrl={current.map_url} onSelectRegion={selectByRegion} />
       </div>
 
@@ -490,17 +459,7 @@ export default function Home() {
 
       <AnimatePresence>
         {uiVisible && !cinema && (
-          <motion.section
-            className="mini-info"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            transition={{ duration: 0.2 }}
-            onPointerEnter={onUIEnter}
-            onPointerLeave={onUILeave}
-            onFocusCapture={onUIEnter}
-            onBlurCapture={onUILeave}
-          >
+          <motion.section className="mini-info" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}>
             <div className="mini-top">
               <h1 className="mini-title">{current.title || "Кыргызстан"}</h1>
               <div className="mini-badges">
@@ -519,39 +478,39 @@ export default function Home() {
           <motion.div className="controls" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}>
             <button
               className="ctrl-btn"
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 togglePause();
               }}
               aria-label={isPaused ? "Воспроизвести" : "Пауза"}
               title={isPaused ? "Play (Space)" : "Pause (Space)"}
-              type="button"
             >
               {isPaused ? "▶" : "❚❚"}
             </button>
 
             <button
               className="ctrl-btn secondary"
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 toggleMuted();
               }}
               aria-label={muted ? "Включить звук" : "Выключить звук"}
               title="Mute (M)"
-              type="button"
             >
               {muted ? "🔇" : "🔊"}
             </button>
 
             <button
               className="ctrl-btn secondary"
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 toggleCinema();
               }}
               aria-label="Кино-режим"
-              title="Cinema (C)"
-              type="button"
+              title={cinema ? "Exit cinema (Esc)" : "Cinema (C)"}
             >
               🎬
             </button>
@@ -559,14 +518,7 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      <footer
-        className={`months-bar ${uiVisible && !cinema ? "" : "hidden-ui"}`}
-        onClick={(e) => e.stopPropagation()}
-        onPointerEnter={onUIEnter}
-        onPointerLeave={onUILeave}
-        onFocusCapture={onUIEnter}
-        onBlurCapture={onUILeave}
-      >
+      <footer className={`months-bar ${uiVisible && !cinema ? "" : "hidden-ui"}`} onClick={(e) => e.stopPropagation()}>
         <div className="months-scroll" ref={scrollRef}>
           {months.map((m) => {
             const active = current.id === m.id;
@@ -591,20 +543,11 @@ export default function Home() {
         </div>
       </footer>
 
+      {/* В кино-режиме показываем простую подсказку (не обязательную для выхода) */}
       <AnimatePresence>
-        {cinema && cinemaHintVisible && (
-          <motion.div
-            className="cinema-hint"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 0.85, y: 0 }}
-            exit={{ opacity: 0, y: 6 }}
-            onClick={() => {
-              setCinema(false);
-              setUiVisible(true);
-              showUI(true);
-            }}
-          >
-            Тапни, чтобы выйти из 🎬 режима
+        {cinema && (
+          <motion.div className="cinema-hint" initial={{ opacity: 0 }} animate={{ opacity: 0.78 }} exit={{ opacity: 0 }}>
+            Тапни в любом месте, чтобы выйти
           </motion.div>
         )}
       </AnimatePresence>
