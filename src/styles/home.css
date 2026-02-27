@@ -476,13 +476,13 @@ body{
 .kg-map[data-active="naryn"] #naryn,
 .kg-map[data-active="issyk_kul"] #issyk_kul,
 .kg-map[data-active="osh"] #osh,
-.kg-map[data-active="jalal_abad"] #jalal_abad,
+.kg-map[data-active="jalal_abad"] #jalal_abad,  
 .kg-map[data-active="talas"] #talas,
 .kg-map[data-active="chui"] #chui,
 .kg-map[data-active="batken"] #batken{
-  fill: rgba(255,215,0,.22);
-  stroke: rgba(255,215,0,.38);
-  filter: drop-shadow(0 0 6px rgba(255,215,0,.10));
+  fill: rgb(255, 255, 0);
+  stroke: rgb(238, 255, 0);
+  filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.655));
   transform: translateY(-0.4px);
 }
 
