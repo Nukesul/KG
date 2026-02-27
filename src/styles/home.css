@@ -21,29 +21,33 @@
 
   /* Light glass */
   --glass: rgba(255,255,255,.16);
-  --glass-strong: rgba(255,255,255,.22);
+  --glass-strong: rgba(255,255,255,.24);
   --stroke: rgba(255,255,255,.30);
   --stroke-soft: rgba(255,255,255,.22);
   --shadow: 0 18px 46px rgba(0,0,0,.18);
 
   /* Text */
   --text: rgba(255,255,255,.95);
-  --text-soft: rgba(255,255,255,.85);
+  --text-soft: rgba(255,255,255,.88);
 
   /* Button */
   --btn: rgba(255,255,255,.14);
-  --btn-hover: rgba(255,255,255,.20);
+  --btn-hover: rgba(255,255,255,.22);
 
-  /* Overlay выключен (почти) */
-  --overlay-alpha-strong: 0.06;
-  --overlay-alpha-weak: 0.03;
+  /* Overlay (very light) */
+  --overlay-alpha-strong: 0.07;
+  --overlay-alpha-weak: 0.035;
+
+  /* Scrim (local readability helpers) */
+  --scrim-dark: rgba(0,0,0,.22);
+  --scrim-dark-2: rgba(0,0,0,.14);
 }
 
-/* Themes = только легкие цветовые акценты */
-.fs-shell.t1 { --a1: var(--sun);  --a2: rgba(255,215,0,.16); }
-.fs-shell.t2 { --a1: var(--sky);  --a2: var(--mint); }
-.fs-shell.t3 { --a1: rgba(160,90,255,.16); --a2: rgba(255,150,0,.16); }
-.fs-shell.t4 { --a1: var(--rose); --a2: rgba(0,200,255,.14); }
+/* Themes = only subtle accents + unified progress color */
+.fs-shell.t1 { --a1: var(--sun);  --a2: rgba(255,215,0,.16);  --prog: rgba(255,215,0,.70); }
+.fs-shell.t2 { --a1: var(--sky);  --a2: var(--mint);          --prog: rgba(80,170,255,.70); }
+.fs-shell.t3 { --a1: rgba(160,90,255,.16); --a2: rgba(255,150,0,.16); --prog: rgba(160,90,255,.70); }
+.fs-shell.t4 { --a1: var(--rose); --a2: rgba(0,200,255,.14);  --prog: rgba(255,90,140,.70); }
 
 *{ margin:0; padding:0; box-sizing:border-box; }
 html,body{ height:100%; }
@@ -75,7 +79,7 @@ body{
   will-change: opacity;
 }
 
-/* Overlay: НЕ темним, только чуть-чуть “воздуха” */
+/* Overlay: light */
 .overlay{ position:absolute; inset:0; pointer-events:none; transition: opacity .25s ease; }
 .overlay-strong{
   opacity: 1;
@@ -101,12 +105,11 @@ body{
   inset:0;
   pointer-events:none;
   transition: opacity .25s ease;
-  /* можно вообще убрать — оставил супер мягко */
   background: radial-gradient(circle at 50% 45%, transparent 66%, rgba(0,0,0,.18));
 }
 .vignette-cinema{ opacity:0; }
 
-/* Grain: мягкий, почти незаметный */
+/* Grain: very subtle */
 .grain{
   position:absolute;
   inset:-20%;
@@ -147,23 +150,25 @@ body{
   filter: drop-shadow(0 12px 22px rgba(0,0,0,.22));
 }
 
-/* Mini info: светлое стекло + градиент-ободок */
+/* Mini info: improved readability with local scrim */
 .mini-info{
   position:fixed;
   top: clamp(72px, 10vh, 120px);
   left: clamp(12px, 4vw, 32px);
   right: clamp(12px, 4vw, 32px);
-  max-width: 640px;
+  max-width: 660px;
   z-index:20;
 
   padding: 12px 14px;
   border-radius: var(--radius);
-  background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.10));
+  background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.11));
   border: 1px solid var(--stroke-soft);
   backdrop-filter: blur(14px);
   box-shadow: var(--shadow);
   overflow:hidden;
 }
+
+/* glow */
 .mini-info::before{
   content:"";
   position:absolute;
@@ -174,14 +179,18 @@ body{
   opacity:.45;
   filter: blur(10px);
 }
+
+/* local scrim behind text (keeps video bright overall, but makes text readable) */
 .mini-info::after{
   content:"";
   position:absolute;
   inset:0;
   border-radius: inherit;
   pointer-events:none;
-  background: radial-gradient(500px 220px at 12% 20%, rgba(255,255,255,.18), transparent 60%);
-  opacity:.55;
+  background:
+    radial-gradient(520px 220px at 14% 18%, rgba(255,255,255,.16), transparent 60%),
+    linear-gradient(to bottom, rgba(0,0,0,.10), rgba(0,0,0,.04));
+  opacity:.70;
 }
 
 .mini-top{
@@ -195,7 +204,7 @@ body{
   font-size: clamp(1.12rem, 4.2vw, 1.95rem);
   font-weight: 600;
   line-height: 1.15;
-  text-shadow: 0 2px 10px rgba(0,0,0,.18);
+  text-shadow: 0 2px 12px rgba(0,0,0,.22);
   display:-webkit-box;
   -webkit-line-clamp:2;
   -webkit-box-orient:vertical;
@@ -215,34 +224,37 @@ body{
   border: 1px solid rgba(255,255,255,.24);
   white-space:nowrap;
   backdrop-filter: blur(10px);
-  color: rgba(255,255,255,.96);
+  color: rgba(255,255,255,.98);
+  position:relative;
 }
 .badge.season{
   background: rgba(255,215,0,.16);
   border-color: rgba(255,215,0,.26);
-  color: rgba(255,255,255,.98);
+  color: rgba(255,255,255,.99);
 }
 .mini-fact{
   position:relative;
   margin-top:8px;
-  font-size:.95rem;
+  font-size:.96rem;
   opacity:.98;
   color: var(--text);
+  text-shadow: 0 1px 10px rgba(0,0,0,.16);
   display:-webkit-box;
-  -webkit-line-clamp:1;
+  -webkit-line-clamp:2;
   -webkit-box-orient:vertical;
   overflow:hidden;
 }
 .mini-desc{
   position:relative;
   margin-top:6px;
-  opacity:.92;
+  opacity:.95;
   color: var(--text-soft);
-  line-height:1.45;
+  line-height:1.48;
   font-weight:300;
-  font-size:.95rem;
+  font-size:.96rem;
+  text-shadow: 0 1px 10px rgba(0,0,0,.14);
   display:-webkit-box;
-  -webkit-line-clamp:2;
+  -webkit-line-clamp:3;
   -webkit-box-orient:vertical;
   overflow:hidden;
 }
@@ -282,7 +294,7 @@ body{
   cursor:pointer;
   background: var(--btn);
   color: var(--white);
-  padding: 10px 16px;
+  padding: 10px 14px;
   border-radius: 14px;
   min-width: 54px;
   font-size: 1rem;
@@ -303,17 +315,16 @@ body{
   background: rgba(255,255,255,.18);
 }
 
-/* Months bar: легкая, не темная */
+/* Months bar: local scrim for readability and separation */
 .months-bar{
   position:fixed;
   left:0; right:0; bottom:0;
   height: calc(var(--bar-h) + var(--safe-bottom));
   padding: 10px 12px calc(10px + var(--safe-bottom)) 12px;
 
-  background: linear-gradient(to top,
-    rgba(255,255,255,.16),
-    rgba(255,255,255,.06)
-  );
+  background:
+    linear-gradient(to top, rgba(0,0,0,.22), rgba(0,0,0,.08) 40%, rgba(0,0,0,0)),
+    linear-gradient(to top, rgba(255,255,255,.14), rgba(255,255,255,.06));
   border-top: 1px solid rgba(255,255,255,.20);
   overflow:hidden;
   z-index:35;
@@ -362,9 +373,10 @@ body{
 }
 .month-btn.active{
   background: rgba(255,255,255,.22);
-  color: var(--accent);
-  border-color: rgba(255,215,0,.28);
+  color: rgba(255,255,255,.98);
+  border-color: rgba(255,255,255,.34);
   box-shadow: 0 12px 28px rgba(0,0,0,.16);
+  outline: 0;
 }
 
 /* scroll hint */
@@ -381,8 +393,8 @@ body{
 .months-scroll.scrolled-to-end .scroll-hint{ opacity:0; }
 .scroll-arrow{
   width:22px; height:22px;
-  color: var(--primary);
-  opacity:.85;
+  color: rgba(255,255,255,.92);
+  opacity:.80;
   animation:pulse 1.4s infinite;
 }
 @keyframes pulse{
@@ -399,15 +411,15 @@ body{
 .scroll-progress{
   height:100%;
   width:0%;
-  background: rgba(227,38,54,.70);
+  background: var(--prog);
   transition: width .2s ease;
-  box-shadow: 0 0 10px rgba(227,38,54,.25);
+  box-shadow: 0 0 10px rgba(255,255,255,.14);
 }
 
 /* Cinema */
 .fs-shell.cinema{ cursor:none; }
 
-/* В cinema режиме подсказку можно вообще убрать, но оставлю стиль */
+/* Cinema hint */
 .cinema-hint{
   position:fixed;
   left:50%;
@@ -437,98 +449,67 @@ body{
 }
 .video-progress{
   height:100%;
-  background: rgba(227,38,54,.75);
+  background: var(--prog);
   transition: width 0.1s linear;
-  box-shadow: 0 0 10px rgba(227,38,54,.25);
+  box-shadow: 0 0 12px rgba(255,255,255,.16);
 }
 
-/* Map: легкий glass + адаптация */
-.kg-map{
+/* Map slot (wrapper) — allows mobile collapse without touching KyrgyzstanMap internals */
+.map-slot{
   position:fixed;
   right: clamp(12px, 3vw, 22px);
   top: clamp(84px, 12vh, 146px);
   z-index:22;
-
-  width: clamp(160px, 22vw, 250px);
-  padding: 10px 10px 8px 10px;
-  border-radius:16px;
-
-  background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.10));
-  border: 1px solid rgba(255,255,255,.22);
-  backdrop-filter: blur(14px);
-  box-shadow: var(--shadow);
+  transform-origin: top right;
+  transition: opacity .22s ease, transform .22s ease;
 }
-.kg-map-header{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:6px;
-  gap:8px;
+.map-slot.closed{
+  opacity:0;
+  pointer-events:none;
+  transform: translateY(6px) scale(.98);
 }
-.kg-map-title{ font-weight:600; font-size:.9rem; opacity:.92; }
-
-.kg-map-link{
-  font-size:.85rem;
-  color: rgba(255,255,255,.95);
-  text-decoration:none;
-  padding: 6px 10px;
-  border-radius:12px;
-  background: rgba(255,255,255,.14);
-  border: 1px solid rgba(255,255,255,.22);
-  white-space: nowrap;
-}
-.kg-map-link:hover{ background: rgba(255,255,255,.20); }
-
-.kg-map-svg{ width:100%; height:auto; }
-
-.kg-regions path{
-  fill: rgba(255,255,255,.10);
-  stroke: rgba(255,255,255,.18);
-  stroke-width:1;
-  transition: fill .2s ease, filter .2s ease, transform .2s ease;
+.fs-shell.cinema .map-slot{
+  opacity:0;
+  pointer-events:none;
 }
 
-.kg-map[data-active="naryn"] #naryn,
-.kg-map[data-active="issyk_kul"] #issyk_kul,
-.kg-map[data-active="osh"] #osh,
-.kg-map[data-active="jalal_abad"] #jalal_abad,
-.kg-map[data-active="talas"] #talas,
-.kg-map[data-active="chui"] #chui,
-.kg-map[data-active="batken"] #batken{
-  fill: rgba(255,215,0,.26);
-  stroke: rgba(255,215,0,.44);
-  filter: drop-shadow(0 0 10px rgba(255,215,0,.18));
-  transform: translateY(-0.5px);
-}
-
-.kg-map-active{
-  margin-top: 6px;
-  font-size: .82rem;
-  opacity: .86;
-}
-
-.fs-shell.cinema .kg-map{ opacity:0; pointer-events:none; }
-
-/* Mobile fix: карта вниз, чтобы не перекрывала mini-info */
+/* Mobile adjustments */
 @media (max-width: 680px){
   :root{ --bar-h: 94px; }
 
   .month-btn{ min-width:64px; font-size:.92rem; padding: 12px 12px; }
 
-  .kg-map{
-    top:auto;
-    bottom: calc(var(--bar-h) + var(--safe-bottom) + 14px);
-    right: 12px;
-    width: 184px;
-    max-width: 184px;
-  }
-
   .controls{
     left: 12px;
     bottom: calc(var(--bar-h) + var(--safe-bottom) + 14px);
+    gap:8px;
+  }
+
+  .ctrl-btn{
+    min-width: 48px;
+    padding: 10px 12px;
+    border-radius: 14px;
   }
 
   .mini-info{
     max-width:none;
+  }
+
+  /* move map to bottom area on mobile (when opened) */
+  .map-slot{
+    top:auto;
+    bottom: calc(var(--bar-h) + var(--safe-bottom) + 14px);
+    right: 12px;
+    transform-origin: bottom right;
+  }
+}
+
+/* Reduced motion (optional but nice) */
+@media (prefers-reduced-motion: reduce){
+  *{
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
   }
 }

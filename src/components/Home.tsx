@@ -84,10 +84,30 @@ export default function Home() {
 
   const [cinemaHintVisible, setCinemaHintVisible] = useState(false);
 
+  // Responsive / mobile behavior
+  const [isMobile, setIsMobile] = useState(false);
+  const [mapOpen, setMapOpen] = useState(true);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cinemaHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Track whether user is actively interacting with UI blocks (do not auto-hide)
+  const interactingRef = useRef(false);
+
+  // Detect mobile (matchMedia) + default map state
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 680px)");
+    const apply = () => {
+      const mobile = mq.matches;
+      setIsMobile(mobile);
+      setMapOpen(!mobile); // on mobile: closed by default; on desktop: open
+    };
+    apply();
+    mq.addEventListener?.("change", apply);
+    return () => mq.removeEventListener?.("change", apply);
+  }, []);
 
   // Load posts
   useEffect(() => {
@@ -124,16 +144,33 @@ export default function Home() {
     return ["t1", "t2", "t3", "t4"][current.id % 4];
   }, [current?.id]);
 
+  const clearHideTimer = useCallback(() => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleAutoHide = useCallback(() => {
+    // No autohide in cinema or when tap-to-start visible
+    if (cinema || needsTapToStart) return;
+
+    clearHideTimer();
+    hideTimerRef.current = setTimeout(() => {
+      // Do not hide if user is interacting with UI
+      if (interactingRef.current) return;
+      setUiVisible(false);
+    }, 3800); // longer, so user can read
+  }, [cinema, needsTapToStart, clearHideTimer]);
+
   const showUI = useCallback(
     (autoHide = true) => {
       if (cinema) return;
       setUiVisible(true);
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-      if (autoHide) {
-        hideTimerRef.current = setTimeout(() => setUiVisible(false), 2200);
-      }
+      clearHideTimer();
+      if (autoHide) scheduleAutoHide();
     },
-    [cinema]
+    [cinema, scheduleAutoHide, clearHideTimer]
   );
 
   const tryPlay = useCallback(async () => {
@@ -144,15 +181,20 @@ export default function Home() {
     try {
       await v.play();
       setNeedsTapToStart(false);
+      // show UI briefly after successful play (helps onboarding)
+      showUI(true);
     } catch (err) {
       console.warn("Video play failed:", err);
       setNeedsTapToStart(true);
+      setUiVisible(true); // keep UI visible if user must tap
+      clearHideTimer();
     }
-  }, [muted, isPaused, videoSrc]);
+  }, [muted, isPaused, videoSrc, showUI, clearHideTimer]);
 
   const changeMonth = useCallback(
     (m: MonthPost) => {
       if (!current || m.id === current.id) return;
+
       setIsFading(true);
       setNeedsTapToStart(false);
       showUI(true);
@@ -160,6 +202,8 @@ export default function Home() {
       setTimeout(() => {
         setCurrent(m);
         setIsFading(false);
+        setVideoProgress(0);
+
         if (videoRef.current) {
           videoRef.current.load();
           setTimeout(tryPlay, 80);
@@ -187,8 +231,8 @@ export default function Home() {
     } else {
       v.pause();
       setIsPaused(true);
+      showUI(true);
     }
-    showUI(true);
   }, [isPaused, tryPlay, showUI]);
 
   const toggleMuted = useCallback(() => {
@@ -207,8 +251,9 @@ export default function Home() {
 
       if (next) {
         setUiVisible(false);
+        clearHideTimer();
 
-        // короткая подсказка (чтобы не мешала)
+        // short hint
         setCinemaHintVisible(true);
         cinemaHintTimerRef.current = setTimeout(() => setCinemaHintVisible(false), 1400);
       } else {
@@ -219,6 +264,11 @@ export default function Home() {
 
       return next;
     });
+  }, [showUI, clearHideTimer]);
+
+  const toggleMap = useCallback(() => {
+    setMapOpen((v) => !v);
+    showUI(true);
   }, [showUI]);
 
   // Keyboard
@@ -234,6 +284,9 @@ export default function Home() {
           break;
         case "KeyC":
           toggleCinema();
+          break;
+        case "KeyK": // map toggle
+          if (isMobile) toggleMap();
           break;
         case "ArrowRight": {
           if (!current) return;
@@ -256,7 +309,7 @@ export default function Home() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [togglePause, toggleMuted, toggleCinema, changeMonth, months, current]);
+  }, [togglePause, toggleMuted, toggleCinema, changeMonth, months, current, isMobile, toggleMap]);
 
   // Video progress + ended
   useEffect(() => {
@@ -328,15 +381,24 @@ export default function Home() {
     );
   }
 
-  const preview = clampText(current.content || "", 120);
-  const fact = clampText(current.fact || "", 90);
+  const preview = clampText(current.content || "", 140);
+  const fact = clampText(current.fact || "", 110);
   const activeRegion = (current.region || "").toLowerCase();
+
+  const onUIEnter = () => {
+    interactingRef.current = true;
+    showUI(false);
+  };
+  const onUILeave = () => {
+    interactingRef.current = false;
+    scheduleAutoHide();
+  };
 
   return (
     <div
-      className={`fs-shell ${theme} ${cinema ? "cinema" : ""}`}
-      onPointerMove={() => showUI()}
-      onClick={() => showUI()}
+      className={`fs-shell ${theme} ${cinema ? "cinema" : ""} ${mapOpen ? "map-open" : "map-closed"}`}
+      onPointerMove={() => showUI(true)}
+      onClick={() => showUI(true)}
     >
       <div className="video-layer">
         <motion.div
@@ -364,29 +426,45 @@ export default function Home() {
         <div className={`vignette ${cinema ? "vignette-cinema" : ""}`} />
         <div className="grain" aria-hidden="true" />
 
-        <div className="video-progress-container">
+        <div className="video-progress-container" aria-hidden="true">
           <div className="video-progress" style={{ width: `${videoProgress}%` }} />
         </div>
       </div>
 
-      <header className={`header ${uiVisible && !cinema ? "" : "hidden-ui"}`}>
+      <header
+        className={`header ${uiVisible && !cinema ? "" : "hidden-ui"}`}
+        onPointerEnter={onUIEnter}
+        onPointerLeave={onUILeave}
+        onFocusCapture={onUIEnter}
+        onBlurCapture={onUILeave}
+      >
         <img src={logo} alt="Кыргызстан" className="logo" />
       </header>
 
-      {/* Map stays, but responsive CSS prevents overlap */}
-      <KyrgyzstanMap activeRegion={activeRegion} mapUrl={current.map_url} />
+      {/* Map */}
+      <div
+        className={`map-slot ${isMobile ? "mobile" : "desktop"} ${mapOpen ? "open" : "closed"}`}
+        onPointerEnter={onUIEnter}
+        onPointerLeave={onUILeave}
+        onFocusCapture={onUIEnter}
+        onBlurCapture={onUILeave}
+      >
+        <KyrgyzstanMap activeRegion={activeRegion} mapUrl={current.map_url} />
+      </div>
 
       <AnimatePresence>
         {needsTapToStart && !cinema && (
           <motion.div
             className="tap-to-start"
             initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 0.95, y: 0 }}
+            animate={{ opacity: 0.96, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
             onClick={(e) => {
               e.stopPropagation();
               tryPlay();
             }}
+            onPointerEnter={onUIEnter}
+            onPointerLeave={onUILeave}
           >
             Нажми, чтобы запустить видео
           </motion.div>
@@ -401,6 +479,10 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
             transition={{ duration: 0.22 }}
+            onPointerEnter={onUIEnter}
+            onPointerLeave={onUILeave}
+            onFocusCapture={onUIEnter}
+            onBlurCapture={onUILeave}
           >
             <div className="mini-top">
               <h1 className="mini-title">{current.title || "Кыргызстан"}</h1>
@@ -415,10 +497,18 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      {/* Controls: только нужные */}
       <AnimatePresence>
         {uiVisible && !cinema && (
-          <motion.div className="controls" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}>
+          <motion.div
+            className="controls"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            onPointerEnter={onUIEnter}
+            onPointerLeave={onUILeave}
+            onFocusCapture={onUIEnter}
+            onBlurCapture={onUILeave}
+          >
             <button
               className="ctrl-btn"
               onClick={(e) => {
@@ -427,6 +517,7 @@ export default function Home() {
               }}
               aria-label={isPaused ? "Воспроизвести" : "Пауза"}
               title={isPaused ? "Play (Space)" : "Pause (Space)"}
+              type="button"
             >
               {isPaused ? "▶" : "❚❚"}
             </button>
@@ -439,9 +530,25 @@ export default function Home() {
               }}
               aria-label={muted ? "Включить звук" : "Выключить звук"}
               title="Mute (M)"
+              type="button"
             >
               {muted ? "🔇" : "🔊"}
             </button>
+
+            {isMobile && (
+              <button
+                className="ctrl-btn secondary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleMap();
+                }}
+                aria-label={mapOpen ? "Скрыть карту" : "Показать карту"}
+                title="Map (K)"
+                type="button"
+              >
+                🗺️
+              </button>
+            )}
 
             <button
               className="ctrl-btn secondary"
@@ -451,6 +558,7 @@ export default function Home() {
               }}
               aria-label="Кино-режим"
               title="Cinema (C)"
+              type="button"
             >
               🎬
             </button>
@@ -458,7 +566,14 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      <footer className={`months-bar ${uiVisible && !cinema ? "" : "hidden-ui"}`} onClick={(e) => e.stopPropagation()}>
+      <footer
+        className={`months-bar ${uiVisible && !cinema ? "" : "hidden-ui"}`}
+        onClick={(e) => e.stopPropagation()}
+        onPointerEnter={onUIEnter}
+        onPointerLeave={onUILeave}
+        onFocusCapture={onUIEnter}
+        onBlurCapture={onUILeave}
+      >
         <div className="months-scroll" ref={scrollRef}>
           {months.map((m) => {
             const active = current.id === m.id;
@@ -478,17 +593,23 @@ export default function Home() {
 
           <div className="scroll-hint" aria-hidden="true">
             <svg viewBox="0 0 24 24" className="scroll-arrow">
-              <path d="M8 5l8 7-8 7" stroke="currentColor" strokeWidth="2.25" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M8 5l8 7-8 7"
+                stroke="currentColor"
+                strokeWidth="2.25"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </div>
         </div>
 
-        <div className="scroll-indicator">
+        <div className="scroll-indicator" aria-hidden="true">
           <div className="scroll-progress" style={{ width: `${scrollProgress}%` }} />
         </div>
       </footer>
 
-      {/* Cinema hint: короткая, не мешает */}
       <AnimatePresence>
         {cinema && cinemaHintVisible && (
           <motion.div
