@@ -12,7 +12,6 @@
   --bar-h: 92px;
   --radius: 18px;
 
-  /* travel palette */
   --sky: rgba(80, 170, 255, .22);
   --sun: rgba(255, 200, 80, .22);
   --rose: rgba(255, 90, 140, .16);
@@ -54,7 +53,7 @@ body{
   overflow:hidden;
 }
 
-/* VIDEO */
+/* Video */
 .video-layer{ position:absolute; inset:0; }
 .hero-video{
   position:absolute;
@@ -65,7 +64,7 @@ body{
 }
 
 /* overlay */
-.overlay{ position:absolute; inset:0; pointer-events:none; transition: opacity .22s ease; }
+.overlay{ position:absolute; inset:0; pointer-events:none; transition: opacity .18s ease; }
 .overlay-strong{
   opacity: 1;
   background:
@@ -89,12 +88,11 @@ body{
   position:absolute;
   inset:0;
   pointer-events:none;
-  transition: opacity .22s ease;
+  transition: opacity .18s ease;
   background: radial-gradient(circle at 50% 45%, transparent 66%, rgba(0,0,0,.18));
 }
 .vignette-cinema{ opacity:0; }
 
-/* grain */
 .grain{
   position:absolute;
   inset:-20%;
@@ -112,7 +110,7 @@ body{
   75%{ transform:translate3d(2%,1%,0); }
 }
 
-/* header */
+/* Header */
 .header{
   position:fixed;
   top:0; left:0; right:0;
@@ -122,7 +120,7 @@ body{
   align-items:center;
   justify-content:center;
   z-index:30;
-  transition: opacity .20s ease, transform .20s ease;
+  transition: opacity .18s ease, transform .18s ease;
 }
 .header.hidden-ui{
   opacity:0;
@@ -135,7 +133,7 @@ body{
   filter: drop-shadow(0 12px 22px rgba(0,0,0,.22));
 }
 
-/* mini-info */
+/* Mini info */
 .mini-info{
   position:fixed;
   top: clamp(72px, 10vh, 120px);
@@ -197,7 +195,6 @@ body{
   white-space:nowrap;
   backdrop-filter: blur(10px);
   color: rgba(255,255,255,.98);
-  position:relative;
 }
 .badge.season{
   background: rgba(255,215,0,.14);
@@ -227,14 +224,13 @@ body{
   overflow:hidden;
 }
 
-/* tap to start */
+/* Tap to start */
 .tap-to-start{
   position:fixed;
   left:50%;
   transform: translateX(-50%);
   top: calc(50% - 20px);
   z-index:50;
-
   background: rgba(255,255,255,.18);
   border: 1px solid rgba(255,255,255,.30);
   padding: 10px 14px;
@@ -245,7 +241,7 @@ body{
   user-select:none;
 }
 
-/* controls */
+/* Controls */
 .controls{
   position:fixed;
   left: clamp(12px, 4vw, 32px);
@@ -264,7 +260,7 @@ body{
   min-width: 54px;
   font-size: 1rem;
   box-shadow: 0 12px 28px rgba(0,0,0,.18);
-  transition: transform .14s ease, background .14s ease;
+  transition: transform .12s ease, background .12s ease;
   touch-action: manipulation;
   border: 1px solid rgba(255,255,255,.20);
   backdrop-filter: blur(14px);
@@ -276,7 +272,7 @@ body{
 .ctrl-btn.secondary{ background: rgba(255,255,255,.12); }
 .ctrl-btn.secondary:hover{ background: rgba(255,255,255,.18); }
 
-/* months bar */
+/* Months bar */
 .months-bar{
   position:fixed;
   left:0; right:0; bottom:0;
@@ -289,7 +285,7 @@ body{
   border-top: 1px solid rgba(255,255,255,.20);
   overflow:hidden;
   z-index:35;
-  transition: opacity .20s ease, transform .20s ease;
+  transition: opacity .18s ease, transform .18s ease;
   backdrop-filter: blur(16px);
 }
 .months-bar.hidden-ui{
@@ -324,7 +320,7 @@ body{
   cursor:pointer;
   scroll-snap-align:center;
   box-shadow: 0 10px 22px rgba(0,0,0,.12);
-  transition: transform .14s ease, background .14s ease;
+  transition: transform .12s ease, background .12s ease;
   border: 1px solid rgba(255,255,255,.22);
   backdrop-filter: blur(14px);
 }
@@ -346,7 +342,7 @@ body{
   display:flex;
   align-items:center;
   flex-shrink:0;
-  transition: opacity .20s ease;
+  transition: opacity .18s ease;
 }
 .months-scroll.scrolled-to-end .scroll-hint{ opacity:0; }
 
@@ -371,14 +367,14 @@ body{
   height:100%;
   width:0%;
   background: var(--prog);
-  transition: width .18s ease;
+  transition: width .16s ease;
   box-shadow: 0 0 10px rgba(255,255,255,.14);
 }
 
-/* cinema */
+/* Cinema */
 .fs-shell.cinema{ cursor:none; }
 
-/* cinema hint */
+/* Cinema hint (always, but exit doesn't depend on it) */
 .cinema-hint{
   position:fixed;
   left:50%;
@@ -393,10 +389,9 @@ body{
   border: 1px solid rgba(255,255,255,.26);
   backdrop-filter: blur(14px);
   user-select:none;
-  cursor:pointer;
 }
 
-/* video progress */
+/* Video progress */
 .video-progress-container{
   position:absolute;
   bottom:0;
@@ -413,7 +408,7 @@ body{
   box-shadow: 0 0 12px rgba(255,255,255,.16);
 }
 
-/* MAP POSITION */
+/* Map */
 .map-slot{
   position:fixed;
   right: clamp(12px, 3vw, 22px);
@@ -425,7 +420,6 @@ body{
   pointer-events:none;
 }
 
-/* MAP STYLE — ровный свет, без пересвета */
 .kg-map{
   width: clamp(160px, 22vw, 250px);
   padding: 10px 10px 8px 10px;
@@ -459,33 +453,26 @@ body{
 
 .kg-map-svg{ width:100%; height:auto; }
 
-/* Regions */
 .kg-regions path{
-  cursor: pointer;
-  outline: none;
+  cursor:pointer;
+  outline:none;
 
   fill: rgba(255,255,255,.10);
   stroke: rgba(255,255,255,.20);
-  stroke-width: 1;
+  stroke-width:1;
 
-  transition: fill .14s ease, stroke .14s ease, filter .14s ease, transform .14s ease;
+  transition: fill .12s ease, stroke .12s ease, filter .12s ease, transform .12s ease;
 }
-
-/* Hover (very soft) */
 .kg-regions path:hover{
   fill: rgba(255,255,255,.16);
   stroke: rgba(255,255,255,.28);
   transform: translateY(-0.35px);
 }
-
-/* Keyboard focus */
 .kg-regions path:focus-visible{
-  filter: drop-shadow(0 0 0 rgba(0,0,0,0));
   stroke: rgba(255,255,255,.48);
-  stroke-width: 1.6;
+  stroke-width:1.6;
 }
 
-/* Active region via data-active on .kg-map */
 .kg-map[data-active="naryn"] #naryn,
 .kg-map[data-active="issyk_kul"] #issyk_kul,
 .kg-map[data-active="osh"] #osh,
@@ -510,31 +497,19 @@ body{
   :root{ --bar-h: 94px; }
 
   .month-btn{ min-width:64px; font-size:.92rem; padding: 12px 12px; }
-
-  .controls{
-    left: 12px;
-    bottom: calc(var(--bar-h) + var(--safe-bottom) + 14px);
-    gap:8px;
-  }
-
+  .controls{ left:12px; bottom: calc(var(--bar-h) + var(--safe-bottom) + 14px); gap:8px; }
   .ctrl-btn{ min-width: 48px; padding: 10px 12px; }
-
   .mini-info{ max-width:none; }
 
-  /* move map down so it doesn’t overlap */
   .map-slot{
     top:auto;
     bottom: calc(var(--bar-h) + var(--safe-bottom) + 14px);
     right: 12px;
   }
-
-  .kg-map{
-    width: 184px;
-    max-width: 184px;
-  }
+  .kg-map{ width: 184px; max-width: 184px; }
 }
 
-/* reduced motion */
+/* Reduced motion */
 @media (prefers-reduced-motion: reduce){
   *{
     animation-duration: .001ms !important;
