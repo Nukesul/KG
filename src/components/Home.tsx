@@ -71,7 +71,6 @@ export default function Home() {
   const [months, setMonths] = useState<MonthPost[]>([]);
   const [current, setCurrent] = useState<MonthPost | null>(null);
 
-  const [isFading, setIsFading] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [muted, setMuted] = useState(true);
 
@@ -84,30 +83,19 @@ export default function Home() {
 
   const [cinemaHintVisible, setCinemaHintVisible] = useState(false);
 
-  // Responsive / mobile behavior
-  const [isMobile, setIsMobile] = useState(false);
-  const [mapOpen, setMapOpen] = useState(true);
-
   const videoRef = useRef<HTMLVideoElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // timers
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cinemaHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Track whether user is actively interacting with UI blocks (do not auto-hide)
+  // interaction lock (don’t autohide while interacting)
   const interactingRef = useRef(false);
 
-  // Detect mobile (matchMedia) + default map state
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 680px)");
-    const apply = () => {
-      const mobile = mq.matches;
-      setIsMobile(mobile);
-      setMapOpen(!mobile); // on mobile: closed by default; on desktop: open
-    };
-    apply();
-    mq.addEventListener?.("change", apply);
-    return () => mq.removeEventListener?.("change", apply);
-  }, []);
+  // throttle UI show to avoid pointermove lag (setState spam)
+  const rafRef = useRef<number | null>(null);
+  const lastShowTsRef = useRef<number>(0);
 
   // Load posts
   useEffect(() => {
@@ -128,6 +116,8 @@ export default function Home() {
     load();
   }, []);
 
+  const activeRegion = useMemo(() => (current?.region || "").toLowerCase() || null, [current?.region]);
+
   const videoSrc = useMemo(() => {
     return current?.video_file ? `${VIDEO_BASE_URL}${current.video_file}` : null;
   }, [current?.video_file]);
@@ -138,7 +128,7 @@ export default function Home() {
     return f.endsWith(".webm") ? "video/webm" : "video/mp4";
   }, [current?.video_file]);
 
-  // theme (soft travel accents)
+  // theme
   const theme = useMemo(() => {
     if (!current) return "t1";
     return ["t1", "t2", "t3", "t4"][current.id % 4];
@@ -152,15 +142,13 @@ export default function Home() {
   }, []);
 
   const scheduleAutoHide = useCallback(() => {
-    // No autohide in cinema or when tap-to-start visible
     if (cinema || needsTapToStart) return;
 
     clearHideTimer();
     hideTimerRef.current = setTimeout(() => {
-      // Do not hide if user is interacting with UI
       if (interactingRef.current) return;
       setUiVisible(false);
-    }, 3800); // longer, so user can read
+    }, 3200); // чуть быстрее и “резче”, без ощущения лагов
   }, [cinema, needsTapToStart, clearHideTimer]);
 
   const showUI = useCallback(
@@ -173,44 +161,84 @@ export default function Home() {
     [cinema, scheduleAutoHide, clearHideTimer]
   );
 
+  // Smooth showUI on pointer move (throttled)
+  const onPointerActivity = useCallback(() => {
+    const now = performance.now();
+    // limit to ~7 calls/sec
+    if (now - lastShowTsRef.current < 140) return;
+    lastShowTsRef.current = now;
+
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      showUI(true);
+    });
+  }, [showUI]);
+
   const tryPlay = useCallback(async () => {
     const v = videoRef.current;
     if (!v || isPaused || !videoSrc) return;
+
     v.muted = muted;
     v.playsInline = true;
+
     try {
       await v.play();
       setNeedsTapToStart(false);
-      // show UI briefly after successful play (helps onboarding)
-      showUI(true);
     } catch (err) {
       console.warn("Video play failed:", err);
       setNeedsTapToStart(true);
-      setUiVisible(true); // keep UI visible if user must tap
+      setUiVisible(true);
       clearHideTimer();
     }
-  }, [muted, isPaused, videoSrc, showUI, clearHideTimer]);
+  }, [muted, isPaused, videoSrc, clearHideTimer]);
 
   const changeMonth = useCallback(
     (m: MonthPost) => {
       if (!current || m.id === current.id) return;
 
-      setIsFading(true);
       setNeedsTapToStart(false);
-      showUI(true);
+      setUiVisible(true);
+      scheduleAutoHide();
 
-      setTimeout(() => {
-        setCurrent(m);
-        setIsFading(false);
-        setVideoProgress(0);
+      setCurrent(m);
 
-        if (videoRef.current) {
-          videoRef.current.load();
-          setTimeout(tryPlay, 80);
-        }
-      }, 380);
+      // reset progress quickly (no fancy fade timers)
+      setVideoProgress(0);
+
+      // ensure reload/play smoothly
+      const v = videoRef.current;
+      if (v) {
+        // The key on <video> will remount, but for safety:
+        // v.load();  // optional, sometimes causes extra stutter; rely on key instead.
+        // tryPlay triggered by effect below
+      }
     },
-    [current, showUI, tryPlay]
+    [current, scheduleAutoHide]
+  );
+
+  // Map click -> choose post like months buttons
+  // If already on same region, cycle to next post in that region.
+  const selectByRegion = useCallback(
+    (regionId: string) => {
+      const r = (regionId || "").toLowerCase();
+      if (!r || months.length === 0) return;
+
+      const candidates = months.filter((p) => (p.region || "").toLowerCase() === r);
+      if (candidates.length === 0) return;
+
+      // if current already in region -> next candidate
+      if (current && (current.region || "").toLowerCase() === r) {
+        const idx = candidates.findIndex((p) => p.id === current.id);
+        const next = candidates[(idx + 1) % candidates.length];
+        if (next) changeMonth(next);
+        return;
+      }
+
+      // else pick first candidate (by id order)
+      changeMonth(candidates[0]);
+    },
+    [months, current, changeMonth]
   );
 
   const onEnded = useCallback(() => {
@@ -231,8 +259,8 @@ export default function Home() {
     } else {
       v.pause();
       setIsPaused(true);
-      showUI(true);
     }
+    showUI(true);
   }, [isPaused, tryPlay, showUI]);
 
   const toggleMuted = useCallback(() => {
@@ -253,9 +281,8 @@ export default function Home() {
         setUiVisible(false);
         clearHideTimer();
 
-        // short hint
         setCinemaHintVisible(true);
-        cinemaHintTimerRef.current = setTimeout(() => setCinemaHintVisible(false), 1400);
+        cinemaHintTimerRef.current = setTimeout(() => setCinemaHintVisible(false), 1200);
       } else {
         setCinemaHintVisible(false);
         setUiVisible(true);
@@ -265,11 +292,6 @@ export default function Home() {
       return next;
     });
   }, [showUI, clearHideTimer]);
-
-  const toggleMap = useCallback(() => {
-    setMapOpen((v) => !v);
-    showUI(true);
-  }, [showUI]);
 
   // Keyboard
   useEffect(() => {
@@ -284,9 +306,6 @@ export default function Home() {
           break;
         case "KeyC":
           toggleCinema();
-          break;
-        case "KeyK": // map toggle
-          if (isMobile) toggleMap();
           break;
         case "ArrowRight": {
           if (!current) return;
@@ -309,7 +328,7 @@ export default function Home() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [togglePause, toggleMuted, toggleCinema, changeMonth, months, current, isMobile, toggleMap]);
+  }, [togglePause, toggleMuted, toggleCinema, changeMonth, months, current]);
 
   // Video progress + ended
   useEffect(() => {
@@ -362,11 +381,12 @@ export default function Home() {
     el.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
   }, [current?.id]);
 
-  // Cleanup timers
+  // Cleanup
   useEffect(() => {
     return () => {
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
       if (cinemaHintTimerRef.current) clearTimeout(cinemaHintTimerRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, []);
 
@@ -383,7 +403,6 @@ export default function Home() {
 
   const preview = clampText(current.content || "", 140);
   const fact = clampText(current.fact || "", 110);
-  const activeRegion = (current.region || "").toLowerCase();
 
   const onUIEnter = () => {
     interactingRef.current = true;
@@ -395,32 +414,32 @@ export default function Home() {
   };
 
   return (
-    <div
-      className={`fs-shell ${theme} ${cinema ? "cinema" : ""} ${mapOpen ? "map-open" : "map-closed"}`}
-      onPointerMove={() => showUI(true)}
-      onClick={() => showUI(true)}
-    >
+    <div className={`fs-shell ${theme} ${cinema ? "cinema" : ""}`} onPointerMove={onPointerActivity} onClick={() => showUI(true)}>
       <div className="video-layer">
-        <motion.div
-          className="video-wrapper"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: isFading ? 0 : 1 }}
-          transition={{ duration: 0.45, ease: "easeInOut" }}
-          style={{ position: "absolute", inset: 0 }}
-        >
-          <video
-            ref={videoRef}
-            className="hero-video"
-            autoPlay
-            muted={muted}
-            playsInline
-            preload="metadata"
-            onCanPlay={tryPlay}
-            key={`video-${current.id}`}
+        {/* Делает смену видео стабильнее: remount видео по current.id */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`video-wrap-${current.id}`}
+            className="video-wrapper"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.28, ease: "easeOut" }}
+            style={{ position: "absolute", inset: 0 }}
           >
-            {videoSrc && <source src={videoSrc} type={videoType} />}
-          </video>
-        </motion.div>
+            <video
+              ref={videoRef}
+              className="hero-video"
+              muted={muted}
+              playsInline
+              preload="metadata"
+              onCanPlay={tryPlay}
+              autoPlay
+            >
+              {videoSrc && <source src={videoSrc} type={videoType} />}
+            </video>
+          </motion.div>
+        </AnimatePresence>
 
         <div className={`overlay ${uiVisible && !cinema ? "overlay-strong" : "overlay-weak"} ${cinema ? "overlay-cinema" : ""}`} />
         <div className={`vignette ${cinema ? "vignette-cinema" : ""}`} />
@@ -441,15 +460,15 @@ export default function Home() {
         <img src={logo} alt="Кыргызстан" className="logo" />
       </header>
 
-      {/* Map */}
+      {/* Карта всегда видна; клик по областям переключает пост */}
       <div
-        className={`map-slot ${isMobile ? "mobile" : "desktop"} ${mapOpen ? "open" : "closed"}`}
+        className={`map-slot ${cinema ? "cinema-hidden" : ""}`}
         onPointerEnter={onUIEnter}
         onPointerLeave={onUILeave}
         onFocusCapture={onUIEnter}
         onBlurCapture={onUILeave}
       >
-        <KyrgyzstanMap activeRegion={activeRegion} mapUrl={current.map_url} />
+        <KyrgyzstanMap activeRegion={activeRegion} mapUrl={current.map_url} onSelectRegion={selectByRegion} />
       </div>
 
       <AnimatePresence>
@@ -463,8 +482,6 @@ export default function Home() {
               e.stopPropagation();
               tryPlay();
             }}
-            onPointerEnter={onUIEnter}
-            onPointerLeave={onUILeave}
           >
             Нажми, чтобы запустить видео
           </motion.div>
@@ -478,7 +495,7 @@ export default function Home() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            transition={{ duration: 0.22 }}
+            transition={{ duration: 0.2 }}
             onPointerEnter={onUIEnter}
             onPointerLeave={onUILeave}
             onFocusCapture={onUIEnter}
@@ -499,16 +516,7 @@ export default function Home() {
 
       <AnimatePresence>
         {uiVisible && !cinema && (
-          <motion.div
-            className="controls"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 6 }}
-            onPointerEnter={onUIEnter}
-            onPointerLeave={onUILeave}
-            onFocusCapture={onUIEnter}
-            onBlurCapture={onUILeave}
-          >
+          <motion.div className="controls" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}>
             <button
               className="ctrl-btn"
               onClick={(e) => {
@@ -534,21 +542,6 @@ export default function Home() {
             >
               {muted ? "🔇" : "🔊"}
             </button>
-
-            {isMobile && (
-              <button
-                className="ctrl-btn secondary"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleMap();
-                }}
-                aria-label={mapOpen ? "Скрыть карту" : "Показать карту"}
-                title="Map (K)"
-                type="button"
-              >
-                🗺️
-              </button>
-            )}
 
             <button
               className="ctrl-btn secondary"
@@ -579,12 +572,7 @@ export default function Home() {
             const active = current.id === m.id;
             return (
               <Tippy key={m.id} content={m.title || ""} placement="top" delay={[250, 0]}>
-                <button
-                  type="button"
-                  data-id={m.id}
-                  className={`month-btn ${active ? "active" : ""}`}
-                  onClick={() => changeMonth(m)}
-                >
+                <button type="button" data-id={m.id} className={`month-btn ${active ? "active" : ""}`} onClick={() => changeMonth(m)}>
                   {MONTHS_SHORT_RU[(Number(m.id) - 1) % 12] || "???"}
                 </button>
               </Tippy>
@@ -593,14 +581,7 @@ export default function Home() {
 
           <div className="scroll-hint" aria-hidden="true">
             <svg viewBox="0 0 24 24" className="scroll-arrow">
-              <path
-                d="M8 5l8 7-8 7"
-                stroke="currentColor"
-                strokeWidth="2.25"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+              <path d="M8 5l8 7-8 7" stroke="currentColor" strokeWidth="2.25" fill="none" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
         </div>

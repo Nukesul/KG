@@ -4,7 +4,6 @@
   --primary:#e32636;
   --accent:#ffd700;
   --white:#fff;
-  --black:#000;
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -13,37 +12,25 @@
   --bar-h: 92px;
   --radius: 18px;
 
-  /* Travel palette (soft) */
+  /* travel palette */
   --sky: rgba(80, 170, 255, .22);
   --sun: rgba(255, 200, 80, .22);
   --rose: rgba(255, 90, 140, .16);
   --mint: rgba(60, 255, 200, .14);
 
-  /* Light glass */
-  --glass: rgba(255,255,255,.16);
-  --glass-strong: rgba(255,255,255,.24);
-  --stroke: rgba(255,255,255,.30);
   --stroke-soft: rgba(255,255,255,.22);
   --shadow: 0 18px 46px rgba(0,0,0,.18);
 
-  /* Text */
   --text: rgba(255,255,255,.95);
   --text-soft: rgba(255,255,255,.88);
 
-  /* Button */
   --btn: rgba(255,255,255,.14);
   --btn-hover: rgba(255,255,255,.22);
 
-  /* Overlay (very light) */
   --overlay-alpha-strong: 0.07;
   --overlay-alpha-weak: 0.035;
-
-  /* Scrim (local readability helpers) */
-  --scrim-dark: rgba(0,0,0,.22);
-  --scrim-dark-2: rgba(0,0,0,.14);
 }
 
-/* Themes = only subtle accents + unified progress color */
 .fs-shell.t1 { --a1: var(--sun);  --a2: rgba(255,215,0,.16);  --prog: rgba(255,215,0,.70); }
 .fs-shell.t2 { --a1: var(--sky);  --a2: var(--mint);          --prog: rgba(80,170,255,.70); }
 .fs-shell.t3 { --a1: rgba(160,90,255,.16); --a2: rgba(255,150,0,.16); --prog: rgba(160,90,255,.70); }
@@ -67,7 +54,7 @@ body{
   overflow:hidden;
 }
 
-/* Video */
+/* VIDEO */
 .video-layer{ position:absolute; inset:0; }
 .hero-video{
   position:absolute;
@@ -75,12 +62,10 @@ body{
   width:100%;
   height:100%;
   object-fit:cover;
-  transition: opacity .45s ease;
-  will-change: opacity;
 }
 
-/* Overlay: light */
-.overlay{ position:absolute; inset:0; pointer-events:none; transition: opacity .25s ease; }
+/* overlay */
+.overlay{ position:absolute; inset:0; pointer-events:none; transition: opacity .22s ease; }
 .overlay-strong{
   opacity: 1;
   background:
@@ -104,12 +89,12 @@ body{
   position:absolute;
   inset:0;
   pointer-events:none;
-  transition: opacity .25s ease;
+  transition: opacity .22s ease;
   background: radial-gradient(circle at 50% 45%, transparent 66%, rgba(0,0,0,.18));
 }
 .vignette-cinema{ opacity:0; }
 
-/* Grain: very subtle */
+/* grain */
 .grain{
   position:absolute;
   inset:-20%;
@@ -127,7 +112,7 @@ body{
   75%{ transform:translate3d(2%,1%,0); }
 }
 
-/* Header */
+/* header */
 .header{
   position:fixed;
   top:0; left:0; right:0;
@@ -137,7 +122,7 @@ body{
   align-items:center;
   justify-content:center;
   z-index:30;
-  transition: opacity .25s ease, transform .25s ease;
+  transition: opacity .20s ease, transform .20s ease;
 }
 .header.hidden-ui{
   opacity:0;
@@ -150,7 +135,7 @@ body{
   filter: drop-shadow(0 12px 22px rgba(0,0,0,.22));
 }
 
-/* Mini info: improved readability with local scrim */
+/* mini-info */
 .mini-info{
   position:fixed;
   top: clamp(72px, 10vh, 120px);
@@ -168,19 +153,6 @@ body{
   overflow:hidden;
 }
 
-/* glow */
-.mini-info::before{
-  content:"";
-  position:absolute;
-  inset:-2px;
-  border-radius: inherit;
-  pointer-events:none;
-  background: linear-gradient(90deg, rgba(255,215,0,.22), rgba(0,200,255,.18), rgba(255,90,140,.16));
-  opacity:.45;
-  filter: blur(10px);
-}
-
-/* local scrim behind text (keeps video bright overall, but makes text readable) */
 .mini-info::after{
   content:"";
   position:absolute;
@@ -188,9 +160,9 @@ body{
   border-radius: inherit;
   pointer-events:none;
   background:
-    radial-gradient(520px 220px at 14% 18%, rgba(255,255,255,.16), transparent 60%),
+    radial-gradient(520px 220px at 14% 18%, rgba(255,255,255,.14), transparent 60%),
     linear-gradient(to bottom, rgba(0,0,0,.10), rgba(0,0,0,.04));
-  opacity:.70;
+  opacity:.62;
 }
 
 .mini-top{
@@ -228,16 +200,13 @@ body{
   position:relative;
 }
 .badge.season{
-  background: rgba(255,215,0,.16);
-  border-color: rgba(255,215,0,.26);
-  color: rgba(255,255,255,.99);
+  background: rgba(255,215,0,.14);
+  border-color: rgba(255,215,0,.22);
 }
 .mini-fact{
   position:relative;
   margin-top:8px;
   font-size:.96rem;
-  opacity:.98;
-  color: var(--text);
   text-shadow: 0 1px 10px rgba(0,0,0,.16);
   display:-webkit-box;
   -webkit-line-clamp:2;
@@ -247,7 +216,6 @@ body{
 .mini-desc{
   position:relative;
   margin-top:6px;
-  opacity:.95;
   color: var(--text-soft);
   line-height:1.48;
   font-weight:300;
@@ -259,7 +227,7 @@ body{
   overflow:hidden;
 }
 
-/* Tap to start */
+/* tap to start */
 .tap-to-start{
   position:fixed;
   left:50%;
@@ -276,11 +244,8 @@ body{
   cursor:pointer;
   user-select:none;
 }
-.tap-to-start:hover{
-  background: rgba(255,255,255,.24);
-}
 
-/* Controls */
+/* controls */
 .controls{
   position:fixed;
   left: clamp(12px, 4vw, 32px);
@@ -299,7 +264,7 @@ body{
   min-width: 54px;
   font-size: 1rem;
   box-shadow: 0 12px 28px rgba(0,0,0,.18);
-  transition: transform .16s ease, background .16s ease, border-color .16s ease;
+  transition: transform .14s ease, background .14s ease;
   touch-action: manipulation;
   border: 1px solid rgba(255,255,255,.20);
   backdrop-filter: blur(14px);
@@ -308,14 +273,10 @@ body{
   background: var(--btn-hover);
   transform: translateY(-1px);
 }
-.ctrl-btn.secondary{
-  background: rgba(255,255,255,.12);
-}
-.ctrl-btn.secondary:hover{
-  background: rgba(255,255,255,.18);
-}
+.ctrl-btn.secondary{ background: rgba(255,255,255,.12); }
+.ctrl-btn.secondary:hover{ background: rgba(255,255,255,.18); }
 
-/* Months bar: local scrim for readability and separation */
+/* months bar */
 .months-bar{
   position:fixed;
   left:0; right:0; bottom:0;
@@ -328,7 +289,7 @@ body{
   border-top: 1px solid rgba(255,255,255,.20);
   overflow:hidden;
   z-index:35;
-  transition: opacity .25s ease, transform .25s ease;
+  transition: opacity .20s ease, transform .20s ease;
   backdrop-filter: blur(16px);
 }
 .months-bar.hidden-ui{
@@ -363,7 +324,7 @@ body{
   cursor:pointer;
   scroll-snap-align:center;
   box-shadow: 0 10px 22px rgba(0,0,0,.12);
-  transition: transform .16s ease, background .16s ease, border-color .16s ease;
+  transition: transform .14s ease, background .14s ease;
   border: 1px solid rgba(255,255,255,.22);
   backdrop-filter: blur(14px);
 }
@@ -373,13 +334,10 @@ body{
 }
 .month-btn.active{
   background: rgba(255,255,255,.22);
-  color: rgba(255,255,255,.98);
   border-color: rgba(255,255,255,.34);
   box-shadow: 0 12px 28px rgba(0,0,0,.16);
-  outline: 0;
 }
 
-/* scroll hint */
 .scroll-hint{
   position: sticky;
   right:0;
@@ -388,9 +346,10 @@ body{
   display:flex;
   align-items:center;
   flex-shrink:0;
-  transition: opacity .25s ease;
+  transition: opacity .20s ease;
 }
 .months-scroll.scrolled-to-end .scroll-hint{ opacity:0; }
+
 .scroll-arrow{
   width:22px; height:22px;
   color: rgba(255,255,255,.92);
@@ -412,14 +371,14 @@ body{
   height:100%;
   width:0%;
   background: var(--prog);
-  transition: width .2s ease;
+  transition: width .18s ease;
   box-shadow: 0 0 10px rgba(255,255,255,.14);
 }
 
-/* Cinema */
+/* cinema */
 .fs-shell.cinema{ cursor:none; }
 
-/* Cinema hint */
+/* cinema hint */
 .cinema-hint{
   position:fixed;
   left:50%;
@@ -437,7 +396,7 @@ body{
   cursor:pointer;
 }
 
-/* Video progress */
+/* video progress */
 .video-progress-container{
   position:absolute;
   bottom:0;
@@ -454,26 +413,99 @@ body{
   box-shadow: 0 0 12px rgba(255,255,255,.16);
 }
 
-/* Map slot (wrapper) — allows mobile collapse without touching KyrgyzstanMap internals */
+/* MAP POSITION */
 .map-slot{
   position:fixed;
   right: clamp(12px, 3vw, 22px);
   top: clamp(84px, 12vh, 146px);
   z-index:22;
-  transform-origin: top right;
-  transition: opacity .22s ease, transform .22s ease;
 }
-.map-slot.closed{
-  opacity:0;
-  pointer-events:none;
-  transform: translateY(6px) scale(.98);
-}
-.fs-shell.cinema .map-slot{
+.map-slot.cinema-hidden{
   opacity:0;
   pointer-events:none;
 }
 
-/* Mobile adjustments */
+/* MAP STYLE — ровный свет, без пересвета */
+.kg-map{
+  width: clamp(160px, 22vw, 250px);
+  padding: 10px 10px 8px 10px;
+  border-radius:16px;
+
+  background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.10));
+  border: 1px solid rgba(255,255,255,.22);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow);
+}
+.kg-map-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:6px;
+  gap:8px;
+}
+.kg-map-title{ font-weight:600; font-size:.9rem; opacity:.92; }
+
+.kg-map-link{
+  font-size:.85rem;
+  color: rgba(255,255,255,.95);
+  text-decoration:none;
+  padding: 6px 10px;
+  border-radius:12px;
+  background: rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.22);
+  white-space: nowrap;
+}
+.kg-map-link:hover{ background: rgba(255,255,255,.20); }
+
+.kg-map-svg{ width:100%; height:auto; }
+
+/* Regions */
+.kg-regions path{
+  cursor: pointer;
+  outline: none;
+
+  fill: rgba(255,255,255,.10);
+  stroke: rgba(255,255,255,.20);
+  stroke-width: 1;
+
+  transition: fill .14s ease, stroke .14s ease, filter .14s ease, transform .14s ease;
+}
+
+/* Hover (very soft) */
+.kg-regions path:hover{
+  fill: rgba(255,255,255,.16);
+  stroke: rgba(255,255,255,.28);
+  transform: translateY(-0.35px);
+}
+
+/* Keyboard focus */
+.kg-regions path:focus-visible{
+  filter: drop-shadow(0 0 0 rgba(0,0,0,0));
+  stroke: rgba(255,255,255,.48);
+  stroke-width: 1.6;
+}
+
+/* Active region via data-active on .kg-map */
+.kg-map[data-active="naryn"] #naryn,
+.kg-map[data-active="issyk_kul"] #issyk_kul,
+.kg-map[data-active="osh"] #osh,
+.kg-map[data-active="jalal_abad"] #jalal_abad,
+.kg-map[data-active="talas"] #talas,
+.kg-map[data-active="chui"] #chui,
+.kg-map[data-active="batken"] #batken{
+  fill: rgba(255,215,0,.22);
+  stroke: rgba(255,215,0,.38);
+  filter: drop-shadow(0 0 6px rgba(255,215,0,.10));
+  transform: translateY(-0.4px);
+}
+
+.kg-map-active{
+  margin-top: 6px;
+  font-size: .82rem;
+  opacity: .86;
+}
+
+/* Mobile */
 @media (max-width: 680px){
   :root{ --bar-h: 94px; }
 
@@ -485,26 +517,24 @@ body{
     gap:8px;
   }
 
-  .ctrl-btn{
-    min-width: 48px;
-    padding: 10px 12px;
-    border-radius: 14px;
-  }
+  .ctrl-btn{ min-width: 48px; padding: 10px 12px; }
 
-  .mini-info{
-    max-width:none;
-  }
+  .mini-info{ max-width:none; }
 
-  /* move map to bottom area on mobile (when opened) */
+  /* move map down so it doesn’t overlap */
   .map-slot{
     top:auto;
     bottom: calc(var(--bar-h) + var(--safe-bottom) + 14px);
     right: 12px;
-    transform-origin: bottom right;
+  }
+
+  .kg-map{
+    width: 184px;
+    max-width: 184px;
   }
 }
 
-/* Reduced motion (optional but nice) */
+/* reduced motion */
 @media (prefers-reduced-motion: reduce){
   *{
     animation-duration: .001ms !important;
