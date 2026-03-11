@@ -7,7 +7,6 @@ import "../styles/home.css";
 import logo from "../assets/logo.png";
 import { supabase } from "../lib/supabaseClient";
 import KyrgyzstanMap from "./KyrgyzstanMap";
-
 const VIDEO_BASE_URL = "https://pub-d90782a2cc9c4ef6903dbc26fa37ea43.r2.dev/";
 
 type MonthPost = {
@@ -16,7 +15,7 @@ type MonthPost = {
   content: string | null;
   video_file: string | null;
   created_at: string;
-  region: string | null;
+  region: string | null;  
   season: string | null;
   fact: string | null;
   map_url: string | null;
@@ -81,6 +80,8 @@ export default function Home() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [scrollProgress, setScrollProgress] = useState(0);
 
+  const [headerVisible, setHeaderVisible] = useState(true);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -90,6 +91,22 @@ export default function Home() {
   // pointer-move throttling
   const rafRef = useRef<number | null>(null);
   const lastShowTsRef = useRef<number>(0);
+
+  // Scroll handling for header
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY > lastScrollY) {
+        setHeaderVisible(false);
+      } else {
+        setHeaderVisible(true);
+      }
+      lastScrollY = currentScrollY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Load posts
   useEffect(() => {
@@ -431,7 +448,7 @@ export default function Home() {
         </div>
       </div>
 
-      <header className={`header ${uiVisible && !cinema ? "" : "hidden-ui"}`} onPointerEnter={onUIEnter} onPointerLeave={onUILeave}>
+      <header className={`header ${uiVisible && !cinema ? "" : "hidden-ui"} ${headerVisible ? "" : "header-scroll-hidden"}`} onPointerEnter={onUIEnter} onPointerLeave={onUILeave}>
         <img src={logo} alt="Кыргызстан" className="logo" />
       </header>
 
@@ -551,6 +568,7 @@ export default function Home() {
           </motion.div>
         )}
       </AnimatePresence>
+
     </div>
   );
 }
