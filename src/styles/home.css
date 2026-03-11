@@ -36,15 +36,18 @@
 .fs-shell.t4 { --a1: var(--rose); --a2: rgba(0,200,255,.14);  --prog: rgba(255,90,140,.70); }
 
 *{ margin:0; padding:0; box-sizing:border-box; }
-html,body{ height:100%; }
+html,body{ 
+  height:100%;
+    scroll-behavior: smooth;
+}
 
 body{
   font-family:"Montserrat", system-ui, -apple-system, sans-serif;
   background:#000;
   color:var(--text);
-  overflow:hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
-
 .fs-shell{
   position:relative;
   width:100vw;
@@ -52,7 +55,6 @@ body{
   height:100svh;
   overflow:hidden;
 }
-
 /* Video */
 .video-layer{ position:absolute; inset:0; }
 .hero-video{
@@ -119,13 +121,16 @@ body{
   display:flex;
   align-items:center;
   justify-content:center;
-  z-index:30;
+  z-index:100;
   transition: opacity .18s ease, transform .18s ease;
 }
 .header.hidden-ui{
   opacity:0;
   transform: translateY(-6px);
   pointer-events:none;
+}
+.header.header-scroll-hidden {
+  transform: translateY(-100%);
 }
 .logo{
   width: clamp(120px, 24vw, 190px);
@@ -135,7 +140,7 @@ body{
 
 /* Mini info */
 .mini-info{
-  position:fixed;
+  position:absolute;
   top: clamp(72px, 10vh, 120px);
   left: clamp(12px, 4vw, 32px);
   right: clamp(12px, 4vw, 32px);
@@ -226,7 +231,7 @@ body{
 
 /* Tap to start */
 .tap-to-start{
-  position:fixed;
+  position:absolute;
   left:50%;
   transform: translateX(-50%);
   top: calc(50% - 20px);
@@ -243,7 +248,7 @@ body{
 
 /* Controls */
 .controls{
-  position:fixed;
+  position:absolute;
   left: clamp(12px, 4vw, 32px);
   bottom: calc(var(--bar-h) + var(--safe-bottom) + 14px);
   z-index:25;
@@ -274,7 +279,7 @@ body{
 
 /* Months bar */
 .months-bar{
-  position:fixed;
+  position:absolute;
   left:0; right:0; bottom:0;
   height: calc(var(--bar-h) + var(--safe-bottom));
   padding: 10px 12px calc(10px + var(--safe-bottom)) 12px;
@@ -376,7 +381,7 @@ body{
 
 /* Cinema hint (always, but exit doesn't depend on it) */
 .cinema-hint{
-  position:fixed;
+  position:absolute;
   left:50%;
   transform: translateX(-50%);
   bottom: calc(var(--safe-bottom) + 18px);
@@ -410,7 +415,7 @@ body{
 
 /* Map */
 .map-slot{
-  position:fixed;
+  position:absolute;
   right: clamp(12px, 3vw, 22px);
   top: clamp(84px, 12vh, 146px);
   z-index:22;
