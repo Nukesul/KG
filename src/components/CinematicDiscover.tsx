@@ -1,4 +1,4 @@
-import React, { memo, useState } from "react";
+import { memo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CalendarDays, X } from "lucide-react";
 import "../styles/cinematic-discover.css";
@@ -116,20 +116,37 @@ export default memo(function CinematicDiscover() {
               initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.92, opacity: 0 }}
-              onClick={(e) => e.stopImmediatePropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
               <button
                 onClick={() => setSelected(null)}
-                style={{ position: "absolute", top: 24, right: 24, zIndex: 10, background: "white", borderRadius: "50%", padding: 12, boxShadow: "0 10px 30px rgba(0,0,0,0.3)" }}
+                style={{
+                  position: "absolute",
+                  top: 24,
+                  right: 24,
+                  zIndex: 10,
+                  background: "white",
+                  borderRadius: "50%",
+                  padding: 12,
+                  boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+                }}
               >
                 <X size={28} />
               </button>
 
-              <img src={selected.image} alt="" style={{ width: "100%", height: "380px", objectFit: "cover" }} />
+              <img
+                src={selected.image}
+                alt=""
+                style={{ width: "100%", height: "380px", objectFit: "cover" }}
+              />
 
               <div style={{ padding: "36px" }}>
-                <h2 style={{ fontSize: "2.3rem", fontWeight: 900, marginBottom: 8 }}>{selected.title}</h2>
-                <p style={{ color: "#d4af77", fontSize: "1.4rem", fontWeight: 700 }}>{selected.duration} • {selected.price}</p>
+                <h2 style={{ fontSize: "2.3rem", fontWeight: 900, marginBottom: 8 }}>
+                  {selected.title}
+                </h2>
+                <p style={{ color: "#d4af77", fontSize: "1.4rem", fontWeight: 700 }}>
+                  {selected.duration} • {selected.price}
+                </p>
                 <p style={{ marginTop: "24px", fontSize: "1.1rem", lineHeight: 1.75, color: "#333" }}>
                   {selected.vibe}
                 </p>
