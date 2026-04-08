@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from "react";
+// src/pages/Home.tsx
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Tippy from "@tippyjs/react";
 import "tippy.js/dist/tippy.css";
@@ -7,6 +15,7 @@ import "../styles/home.css";
 import logo from "../assets/logo.png";
 import { supabase } from "../lib/supabaseClient";
 import KyrgyzstanMap from "./KyrgyzstanMap";
+
 const VIDEO_BASE_URL = "https://pub-d90782a2cc9c4ef6903dbc26fa37ea43.r2.dev/";
 
 type MonthPost = {
@@ -15,13 +24,26 @@ type MonthPost = {
   content: string | null;
   video_file: string | null;
   created_at: string;
-  region: string | null;  
+  region: string | null;
   season: string | null;
   fact: string | null;
   map_url: string | null;
 };
 
-const MONTHS_SHORT_RU = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
+const MONTHS_SHORT_RU = [
+  "Янв",
+  "Фев",
+  "Мар",
+  "Апр",
+  "Май",
+  "Июн",
+  "Июл",
+  "Авг",
+  "Сен",
+  "Окт",
+  "Ноя",
+  "Дек",
+];
 
 function useViewportCSSVar() {
   useLayoutEffect(() => {
@@ -30,8 +52,8 @@ function useViewportCSSVar() {
       document.documentElement.style.setProperty("--app-vh", `${h}px`);
     };
     setVars();
-    window.addEventListener("resize", setVars);
-    window.visualViewport?.addEventListener("resize", setVars);
+    window.addEventListener("resize", setVars, { passive: true });
+    window.visualViewport?.addEventListener("resize", setVars, { passive: true });
     return () => {
       window.removeEventListener("resize", setVars);
       window.visualViewport?.removeEventListener("resize", setVars);
@@ -46,7 +68,12 @@ function clampText(s: string, max = 110) {
 
 function seasonLabel(s?: string | null) {
   const v = (s || "").toLowerCase();
-  const map: Record<string, string> = { winter: "Зима", spring: "Весна", summer: "Лето", autumn: "Осень" };
+  const map: Record<string, string> = {
+    winter: "Зима",
+    spring: "Весна",
+    summer: "Лето",
+    autumn: "Осень",
+  };
   return map[v] || "Сезон";
 }
 
@@ -64,6 +91,24 @@ function regionLabel(r?: string | null) {
   return map[v] || "Область";
 }
 
+function useRafThrottled<T extends (...args: any[]) => void>(fn: T) {
+  const fnRef = useRef(fn);
+  fnRef.current = fn;
+
+  const rafRef = useRef<number | null>(null);
+  const lastArgsRef = useRef<any[] | null>(null);
+
+  return useCallback((...args: any[]) => {
+    lastArgsRef.current = args;
+    if (rafRef.current != null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const a = lastArgsRef.current || [];
+      fnRef.current(...a);
+    });
+  }, []);
+}
+
 export default function Home() {
   useViewportCSSVar();
 
@@ -77,9 +122,6 @@ export default function Home() {
   const [uiVisible, setUiVisible] = useState(true);
 
   const [needsTapToStart, setNeedsTapToStart] = useState(false);
-  const [videoProgress, setVideoProgress] = useState(0);
-  const [scrollProgress, setScrollProgress] = useState(0);
-
   const [headerVisible, setHeaderVisible] = useState(true);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -88,31 +130,36 @@ export default function Home() {
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const interactingRef = useRef(false);
 
-  // pointer-move throttling
-  const rafRef = useRef<number | null>(null);
+  const uiRafRef = useRef<number | null>(null);
   const lastShowTsRef = useRef<number>(0);
 
-  // Scroll handling for header
+  const videoProgressElRef = useRef<HTMLDivElement>(null);
+  const scrollProgressElRef = useRef<HTMLDivElement>(null);
+
+  // Header scroll (cheap)
   useEffect(() => {
     let lastScrollY = window.scrollY;
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      if (currentScrollY > lastScrollY) {
-        setHeaderVisible(false);
-      } else {
-        setHeaderVisible(true);
-      }
-      lastScrollY = currentScrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      setHeaderVisible(y <= lastScrollY);
+      lastScrollY = y;
     };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   // Load posts
   useEffect(() => {
+    let alive = true;
     const load = async () => {
       try {
-        const { data, error } = await supabase.from("posts").select("*").order("id", { ascending: true });
+        const { data, error } = await supabase
+          .from("posts")
+          .select("*")
+          .order("id", { ascending: true });
+
+        if (!alive) return;
+
         if (error) {
           console.error("Supabase load error:", error);
           return;
@@ -125,13 +172,20 @@ export default function Home() {
       }
     };
     load();
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  const activeRegion = useMemo(() => (current?.region || "").toLowerCase() || null, [current?.region]);
+  const activeRegion = useMemo(
+    () => (current?.region || "").toLowerCase() || null,
+    [current?.region]
+  );
 
-  const videoSrc = useMemo(() => {
-    return current?.video_file ? `${VIDEO_BASE_URL}${current.video_file}` : null;
-  }, [current?.video_file]);
+  const videoSrc = useMemo(
+    () => (current?.video_file ? `${VIDEO_BASE_URL}${current.video_file}` : null),
+    [current?.video_file]
+  );
 
   const videoType = useMemo(() => {
     if (!current?.video_file) return "";
@@ -145,42 +199,39 @@ export default function Home() {
   }, [current?.id]);
 
   const clearHideTimer = useCallback(() => {
-    if (hideTimerRef.current) {
-      clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = null;
-    }
+    if (!hideTimerRef.current) return;
+    clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = null;
   }, []);
 
   const scheduleAutoHide = useCallback(() => {
-    // в cinema UI не нужен
     if (cinema || needsTapToStart) return;
-
     clearHideTimer();
     hideTimerRef.current = setTimeout(() => {
       if (interactingRef.current) return;
       setUiVisible(false);
-    }, 3000);
+    }, 2500);
   }, [cinema, needsTapToStart, clearHideTimer]);
 
   const showUI = useCallback(
     (autoHide = true) => {
-      if (cinema) return; // в cinema UI спрятан
+      if (cinema) return;
       setUiVisible(true);
       clearHideTimer();
       if (autoHide) scheduleAutoHide();
     },
-    [cinema, scheduleAutoHide, clearHideTimer]
+    [cinema, clearHideTimer, scheduleAutoHide]
   );
 
   const onPointerActivity = useCallback(() => {
-    if (cinema) return; // в cinema не показываем UI, а выход делаем кликом (см. onRootClick)
+    if (cinema) return;
     const now = performance.now();
     if (now - lastShowTsRef.current < 140) return;
     lastShowTsRef.current = now;
 
-    if (rafRef.current) return;
-    rafRef.current = requestAnimationFrame(() => {
-      rafRef.current = null;
+    if (uiRafRef.current) return;
+    uiRafRef.current = requestAnimationFrame(() => {
+      uiRafRef.current = null;
       showUI(true);
     });
   }, [cinema, showUI]);
@@ -212,20 +263,21 @@ export default function Home() {
       scheduleAutoHide();
 
       setCurrent(m);
-      setVideoProgress(0);
-      // video перерисуется (key), а tryPlay вызовется из onCanPlay/эффекта
+
+      // сброс прогресса без setState (без перерендеров)
+      if (videoProgressElRef.current) videoProgressElRef.current.style.width = "0%";
     },
     [current, scheduleAutoHide]
   );
 
-  // Map click -> choose post like months buttons.
-  // If already on same region, cycle within that region.
   const selectByRegion = useCallback(
     (regionId: string) => {
       const r = (regionId || "").toLowerCase();
       if (!r || months.length === 0) return;
 
-      const candidates = months.filter((p) => (p.region || "").toLowerCase() === r);
+      const candidates = months.filter(
+        (p) => (p.region || "").toLowerCase() === r
+      );
       if (candidates.length === 0) return;
 
       if (current && (current.region || "").toLowerCase() === r) {
@@ -292,9 +344,6 @@ export default function Home() {
     });
   }, [clearHideTimer, scheduleAutoHide]);
 
-  // Root click behavior:
-  // - if cinema: any click exits cinema (simple!)
-  // - else: show UI
   const onRootClick = useCallback(() => {
     if (cinema) {
       setCinema(false);
@@ -334,7 +383,6 @@ export default function Home() {
           break;
       }
     };
-
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [togglePause, toggleMuted, toggleCinema, goNext, goPrev, cinema, scheduleAutoHide]);
@@ -345,38 +393,53 @@ export default function Home() {
     tryPlay();
   }, [current, tryPlay]);
 
-  // Months scroll progress
+  // Months scroll progress (rAF throttled, no spam setState)
+  const updateScrollProgress = useRafThrottled(() => {
+    const el = scrollRef.current;
+    if (!el || !scrollProgressElRef.current) return;
+    const max = el.scrollWidth - el.clientWidth;
+    const pct = max > 0 ? (el.scrollLeft / max) * 100 : 0;
+    scrollProgressElRef.current.style.width = `${pct}%`;
+    el.classList.toggle(
+      "scrolled-to-end",
+      el.scrollLeft + el.clientWidth >= el.scrollWidth - 8
+    );
+  });
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-
-    const updateScroll = () => {
-      const max = el.scrollWidth - el.clientWidth;
-      setScrollProgress(max > 0 ? (el.scrollLeft / max) * 100 : 0);
-      el.classList.toggle("scrolled-to-end", el.scrollLeft + el.clientWidth >= el.scrollWidth - 8);
-    };
-
-    el.addEventListener("scroll", updateScroll, { passive: true });
-    updateScroll();
-
-    return () => el.removeEventListener("scroll", updateScroll);
-  }, [months]);
+    el.addEventListener("scroll", updateScrollProgress, { passive: true });
+    updateScrollProgress();
+    return () => el.removeEventListener("scroll", updateScrollProgress);
+  }, [months, updateScrollProgress]);
 
   // Center active month
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el || !current) return;
-    const btn = el.querySelector<HTMLButtonElement>(`button[data-id="${current.id}"]`);
+    const btn = el.querySelector<HTMLButtonElement>(
+      `button[data-id="${current.id}"]`
+    );
     if (!btn) return;
     const left = btn.offsetLeft - (el.clientWidth - btn.clientWidth) / 2;
     el.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
   }, [current?.id]);
 
+  // Video progress (rAF throttled, no setState)
+  const updateVideoProgress = useRafThrottled(() => {
+    const v = videoRef.current;
+    const bar = videoProgressElRef.current;
+    if (!v || !bar || !v.duration) return;
+    const pct = (v.currentTime / v.duration) * 100;
+    bar.style.width = `${pct}%`;
+  });
+
   // Cleanup
   useEffect(() => {
     return () => {
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (uiRafRef.current) cancelAnimationFrame(uiRafRef.current);
     };
   }, []);
 
@@ -404,7 +467,11 @@ export default function Home() {
   };
 
   return (
-    <div className={`fs-shell ${theme} ${cinema ? "cinema" : ""}`} onPointerMove={onPointerActivity} onClick={onRootClick}>
+    <div
+      className={`fs-shell ${theme} ${cinema ? "cinema" : ""}`}
+      onPointerMove={onPointerActivity}
+      onClick={onRootClick}
+    >
       <div className="video-layer">
         <AnimatePresence mode="wait">
           <motion.div
@@ -413,10 +480,11 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.26, ease: "easeOut" }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
             style={{ position: "absolute", inset: 0 }}
           >
             <video
+              key={`video-${current.id}`}
               ref={videoRef}
               className="hero-video"
               muted={muted}
@@ -424,37 +492,51 @@ export default function Home() {
               preload="metadata"
               autoPlay
               onCanPlay={tryPlay}
-              // ✅ FIX: автопереход гарантированно работает
               onEnded={() => {
                 if (!isPaused) goNext();
               }}
-              onTimeUpdate={() => {
-                const v = videoRef.current;
-                if (!v || !v.duration) return;
-                setVideoProgress((v.currentTime / v.duration) * 100);
-              }}
+              onTimeUpdate={updateVideoProgress}
             >
               {videoSrc && <source src={videoSrc} type={videoType} />}
             </video>
           </motion.div>
         </AnimatePresence>
 
-        <div className={`overlay ${uiVisible && !cinema ? "overlay-strong" : "overlay-weak"} ${cinema ? "overlay-cinema" : ""}`} />
+        <div
+          className={`overlay ${
+            uiVisible && !cinema ? "overlay-strong" : "overlay-weak"
+          } ${cinema ? "overlay-cinema" : ""}`}
+        />
         <div className={`vignette ${cinema ? "vignette-cinema" : ""}`} />
         <div className="grain" aria-hidden="true" />
 
         <div className="video-progress-container" aria-hidden="true">
-          <div className="video-progress" style={{ width: `${videoProgress}%` }} />
+          <div className="video-progress" ref={videoProgressElRef} style={{ width: "0%" }} />
         </div>
       </div>
 
-      <header className={`header ${uiVisible && !cinema ? "" : "hidden-ui"} ${headerVisible ? "" : "header-scroll-hidden"}`} onPointerEnter={onUIEnter} onPointerLeave={onUILeave}>
+      <header
+        className={`header ${uiVisible && !cinema ? "" : "hidden-ui"} ${
+          headerVisible ? "" : "header-scroll-hidden"
+        }`}
+        onPointerEnter={onUIEnter}
+        onPointerLeave={onUILeave}
+      >
         <img src={logo} alt="Кыргызстан" className="logo" />
       </header>
 
-      {/* Карта всегда видна; клики не должны “вылетать” в root */}
-      <div className={`map-slot ${cinema ? "cinema-hidden" : ""}`} onPointerEnter={onUIEnter} onPointerLeave={onUILeave}>
-        <KyrgyzstanMap activeRegion={activeRegion} mapUrl={current.map_url} onSelectRegion={selectByRegion} />
+      {/* ВАЖНО: стопаем bubbling, иначе клики по карте будут триггерить root */}
+      <div
+        className={`map-slot ${cinema ? "cinema-hidden" : ""}`}
+        onPointerEnter={onUIEnter}
+        onPointerLeave={onUILeave}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <KyrgyzstanMap
+          activeRegion={activeRegion}
+          mapUrl={current.map_url}
+          onSelectRegion={selectByRegion}
+        />
       </div>
 
       <AnimatePresence>
@@ -476,7 +558,15 @@ export default function Home() {
 
       <AnimatePresence>
         {uiVisible && !cinema && (
-          <motion.section className="mini-info" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}>
+          <motion.section
+            className="mini-info"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            onClick={(e) => e.stopPropagation()}
+            onPointerEnter={onUIEnter}
+            onPointerLeave={onUILeave}
+          >
             <div className="mini-top">
               <h1 className="mini-title">{current.title || "Кыргызстан"}</h1>
               <div className="mini-badges">
@@ -492,7 +582,15 @@ export default function Home() {
 
       <AnimatePresence>
         {uiVisible && !cinema && (
-          <motion.div className="controls" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}>
+          <motion.div
+            className="controls"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            onClick={(e) => e.stopPropagation()}
+            onPointerEnter={onUIEnter}
+            onPointerLeave={onUILeave}
+          >
             <button
               className="ctrl-btn"
               type="button"
@@ -535,13 +633,23 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      <footer className={`months-bar ${uiVisible && !cinema ? "" : "hidden-ui"}`} onClick={(e) => e.stopPropagation()}>
+      <footer
+        className={`months-bar ${uiVisible && !cinema ? "" : "hidden-ui"}`}
+        onClick={(e) => e.stopPropagation()}
+        onPointerEnter={onUIEnter}
+        onPointerLeave={onUILeave}
+      >
         <div className="months-scroll" ref={scrollRef}>
           {months.map((m) => {
             const active = current.id === m.id;
             return (
               <Tippy key={m.id} content={m.title || ""} placement="top" delay={[250, 0]}>
-                <button type="button" data-id={m.id} className={`month-btn ${active ? "active" : ""}`} onClick={() => changeMonth(m)}>
+                <button
+                  type="button"
+                  data-id={m.id}
+                  className={`month-btn ${active ? "active" : ""}`}
+                  onClick={() => changeMonth(m)}
+                >
                   {MONTHS_SHORT_RU[(Number(m.id) - 1) % 12] || "???"}
                 </button>
               </Tippy>
@@ -550,25 +658,35 @@ export default function Home() {
 
           <div className="scroll-hint" aria-hidden="true">
             <svg viewBox="0 0 24 24" className="scroll-arrow">
-              <path d="M8 5l8 7-8 7" stroke="currentColor" strokeWidth="2.25" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M8 5l8 7-8 7"
+                stroke="currentColor"
+                strokeWidth="2.25"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </div>
         </div>
 
         <div className="scroll-indicator" aria-hidden="true">
-          <div className="scroll-progress" style={{ width: `${scrollProgress}%` }} />
+          <div className="scroll-progress" ref={scrollProgressElRef} style={{ width: "0%" }} />
         </div>
       </footer>
 
-      {/* В кино-режиме показываем простую подсказку (не обязательную для выхода) */}
       <AnimatePresence>
         {cinema && (
-          <motion.div className="cinema-hint" initial={{ opacity: 0 }} animate={{ opacity: 0.78 }} exit={{ opacity: 0 }}>
+          <motion.div
+            className="cinema-hint"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.78 }}
+            exit={{ opacity: 0 }}
+          >
             Тапни в любом месте, чтобы выйти
           </motion.div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }

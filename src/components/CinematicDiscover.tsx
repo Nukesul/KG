@@ -1,202 +1,143 @@
-import React, { memo } from "react";
-import { motion, type Variants } from "framer-motion";
-import { Mountain, Waves, Tent, Star, ArrowRight } from "lucide-react";
+import React, { memo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { CalendarDays, X } from "lucide-react";
 import "../styles/cinematic-discover.css";
 
-type Stat = {
+type Plan = {
   id: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
-  number: string;
-  label: string;
-  short: string;
-  description: string;
+  title: string;
+  duration: string;
+  price: string;
+  image: string;
+  vibe: string;
+  size: "big" | "medium" | "small";
 };
 
-const containerVariants: Variants = {
-  hidden: {},
-  visible: {
-    transition: {
-      staggerChildren: 0.14,
-      delayChildren: 0.12,
-    },
-  },
-};
-
-const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 22 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.75, ease: [0.22, 1, 0.36, 1] },
-  },
-};
-
-const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 18, scale: 0.985 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: { duration: 0.65, ease: [0.22, 1, 0.36, 1] },
-  },
-};
-
-const STATS: Stat[] = [
+const PLANS: Plan[] = [
   {
-    id: "mountains",
-    icon: Mountain,
-    number: "94%",
-    label: "горные ландшафты",
-    short: "Вершины, ущелья и перевалы — ощущение масштаба.",
-    description:
-      "Почти вся страна — драматичный рельеф: перевалы, ущелья и вершины, которые дают мощное чувство высоты и простора.",
+    id: "1",
+    title: "Иссык-Куль + каньоны",
+    duration: "4 дня",
+    price: "от 48 000 ₽",
+    image: "https://picsum.photos/id/1015/800/600",
+    vibe: "Бирюзовое озеро, Джети-Огуз и горячие источники",
+    size: "big",
   },
   {
-    id: "lakes",
-    icon: Waves,
-    number: "2000+",
-    label: "озёр и водоёмов",
-    short: "От Иссык-Куля до зеркальных высокогорных озёр.",
-    description:
-      "От легендарного Иссык-Куля до зеркальных высокогорных озёр среди тишины, ветра и редкой чистоты пространства.",
+    id: "2",
+    title: "Сон-Куль: юрты и кони",
+    duration: "5 дней",
+    price: "от 52 000 ₽",
+    image: "https://picsum.photos/id/1005/800/600",
+    vibe: "Высокогорное озеро, ночь в юрте и звёздное небо",
+    size: "medium",
   },
   {
-    id: "nomads",
-    icon: Tent,
-    number: "6000 лет",
-    label: "кочевой истории",
-    short: "Юрты, традиции, эпос и гостеприимство — живое.",
-    description:
-      "Живая культура: юрты, традиции, эпос, гостеприимство и связь с природой — это ощущается не как музей, а как настоящее.",
+    id: "3",
+    title: "Ала-Арча у Бишкека",
+    duration: "3 дня",
+    price: "от 28 000 ₽",
+    image: "https://picsum.photos/id/133/800/600",
+    vibe: "Мощные горы и треки рядом со столицей",
+    size: "small",
   },
   {
-    id: "sky",
-    icon: Star,
-    number: "TOP",
-    label: "небо для наблюдений",
-    short: "Высота и чистый воздух — почти нет светового шума.",
-    description:
-      "Чистый воздух, высота и удалённость от мегаполисов создают редкую атмосферу для наблюдения за ночным небом.",
+    id: "4",
+    title: "Арсланбоб и ореховые леса",
+    duration: "6 дней",
+    price: "от 45 000 ₽",
+    image: "https://picsum.photos/id/201/800/600",
+    vibe: "Древние леса, водопады и южный колорит",
+    size: "medium",
+  },
+  {
+    id: "5",
+    title: "Классическое кольцо Кыргызстана",
+    duration: "7 дней",
+    price: "от 68 000 ₽",
+    image: "https://picsum.photos/id/1009/800/600",
+    vibe: "Все главные красоты за одну поездку",
+    size: "small",
   },
 ];
 
-function CinematicDiscover() {
+export default memo(function CinematicDiscover() {
+  const [selected, setSelected] = useState<Plan | null>(null);
+
   return (
-    <section className="cd" aria-label="Discover Kyrgyzstan">
-      <div className="cd__bg" aria-hidden="true">
-        <div className="cd__glow cd__glow--a" />
-        <div className="cd__glow cd__glow--b" />
-        <div className="cd__grid" />
-        <div className="cd__noise" />
+    <section className="kg-section">
+      {/* HERO */}
+      <div className="kg-hero">
+        <div className="relative z-10">
+          <h1 className="kg-title">СЕРДЦЕ КЫРГЫЗСТАНА</h1>
+          <p className="kg-subtitle">
+            От активного отдыха в горах до спокойного релакса у Иссык-Куля
+          </p>
+        </div>
       </div>
 
-      <motion.div
-        className="cd__inner"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <motion.header className="cd-hero" variants={fadeUp}>
-          <div className="cd-badge" aria-label="Badge">
-            <span className="cd-badge__dot" aria-hidden="true" />
-            Discover Kyrgyzstan
-          </div>
-
-          <motion.p className="cd-kicker" variants={fadeUp}>
-            Там, где природа звучит громче слов
-          </motion.p>
-
-          <motion.h1 className="cd-title" variants={fadeUp}>
-            Некоторые места
-            <br />
-            просто посещают.
-            <br />
-            <span>Кыргызстан — проживают.</span>
-          </motion.h1>
-
-          <motion.p className="cd-desc" variants={fadeUp}>
-            Это не просто точка на карте. Это пространство света, высоты, холодных
-            озёр и чувства свободы, которое остаётся намного дольше самого путешествия.
-          </motion.p>
-
-          <motion.div className="cd-actions" variants={fadeUp}>
-            <button className="cd-btn cd-btn--primary" type="button" aria-label="Исследовать направление">
-              Исследовать направление <ArrowRight size={18} />
-            </button>
-            <div className="cd-note">
-              Настоящая природа. Настоящая тишина. Настоящие эмоции.
+      {/* КРЕАТИВНАЯ ГАЛЕРЕЯ */}
+      <div className="kg-gallery">
+        {PLANS.map((plan, index) => (
+          <motion.div
+            key={plan.id}
+            className={`kg-item ${plan.size}`}
+            onClick={() => setSelected(plan)}
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.09, duration: 0.7 }}
+          >
+            <img src={plan.image} alt={plan.title} />
+            <div className="kg-item-text">
+              <div className="kg-item-duration">
+                <CalendarDays size={18} />
+                {plan.duration}
+              </div>
+              <h3 className="kg-item-title">{plan.title}</h3>
+              <p className="kg-item-vibe">{plan.vibe}</p>
+              <div className="kg-item-price">{plan.price}</div>
             </div>
           </motion.div>
-        </motion.header>
+        ))}
+      </div>
 
-        <motion.div className="cd-mobile-overview" variants={fadeUp} aria-label="Короткие факты">
-          <div className="cd-mobile-overview__item">
-            <span className="cd-mobile-overview__value">94%</span>
-            <span className="cd-mobile-overview__label">горы</span>
-          </div>
-          <div className="cd-mobile-overview__item">
-            <span className="cd-mobile-overview__value">2000+</span>
-            <span className="cd-mobile-overview__label">озёр</span>
-          </div>
-          <div className="cd-mobile-overview__item">
-            <span className="cd-mobile-overview__value">6000 лет</span>
-            <span className="cd-mobile-overview__label">культуры</span>
-          </div>
-        </motion.div>
-
-        <motion.div className="cd-stats" variants={containerVariants} aria-label="Факты о Кыргызстане">
-          {STATS.map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <motion.article
-                key={stat.id}
-                className="cd-card"
-                variants={cardVariants}
-                whileHover={{ y: -8, scale: 1.01 }}
-                transition={{ duration: 0.28, ease: "easeOut" }}
+      {/* ПРЕМИУМ МОДАЛЬНОЕ ОКНО */}
+      <AnimatePresence>
+        {selected && (
+          <motion.div
+            className="kg-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelected(null)}
+          >
+            <motion.div
+              className="kg-modal"
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              onClick={(e) => e.stopImmediatePropagation()}
+            >
+              <button
+                onClick={() => setSelected(null)}
+                style={{ position: "absolute", top: 24, right: 24, zIndex: 10, background: "white", borderRadius: "50%", padding: 12, boxShadow: "0 10px 30px rgba(0,0,0,0.3)" }}
               >
-                <div className="cd-card__top">
-                  <div className="cd-icon">
-                    <Icon size={26} className="cd-icon__svg" />
-                  </div>
-                  <div className="cd-line" aria-hidden="true" />
-                </div>
+                <X size={28} />
+              </button>
 
-                <div className="cd-card__body">
-                  <h2 className="cd-number">{stat.number}</h2>
-                  <h3 className="cd-label">{stat.label}</h3>
+              <img src={selected.image} alt="" style={{ width: "100%", height: "380px", objectFit: "cover" }} />
 
-                  <p className="cd-text cd-text--mobile">{stat.short}</p>
-                  <p className="cd-text cd-text--desktop">{stat.description}</p>
-                </div>
-              </motion.article>
-            );
-          })}
-        </motion.div>
-
-        <motion.div className="cd-hint" variants={fadeUp} aria-hidden="true">
-          Проведите влево, чтобы посмотреть больше
-        </motion.div>
-
-        <motion.footer className="cd-bottom" variants={fadeUp}>
-          <div className="cd-bottom__left">
-            <span className="cd-overline">Впечатление, а не маршрут</span>
-            <p>
-              Кыргызстан ощущается не как поездка, а как состояние: простор, высота,
-              ветер, огонь, вода и тишина, которую невозможно забыть.
-            </p>
-          </div>
-
-          <div className="cd-bottom__right">
-            <div className="cd-metric" aria-label="Ощущение свободы">
-              <span className="cd-metric__value">∞</span>
-              <span className="cd-metric__label">ощущение свободы</span>
-            </div>
-          </div>
-        </motion.footer>
-      </motion.div>
+              <div style={{ padding: "36px" }}>
+                <h2 style={{ fontSize: "2.3rem", fontWeight: 900, marginBottom: 8 }}>{selected.title}</h2>
+                <p style={{ color: "#d4af77", fontSize: "1.4rem", fontWeight: 700 }}>{selected.duration} • {selected.price}</p>
+                <p style={{ marginTop: "24px", fontSize: "1.1rem", lineHeight: 1.75, color: "#333" }}>
+                  {selected.vibe}
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
-}
-
-export default memo(CinematicDiscover);
+});
