@@ -1,0 +1,118 @@
+/* =======================
+   NAV BAR - ТВОЙ ОРИГИНАЛЬНЫЙ СТИЛЬ + ИСПРАВЛЕННЫЙ АДАПТИВ
+   ======================= */
+
+.ConBlock {
+  width: 100%;
+  height: 70px;
+  position: fixed;
+  bottom: 2%;
+  left: 0;
+  display: flex;
+  justify-content: center;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.ConBlock__MinBlock {
+  width: 70%;
+  max-width: 900px;
+  height: 100%;
+  background-color: rgba(219, 255, 243, 0.15);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 50px;
+  border: 1px solid rgba(151, 255, 220, 0.25);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Зернистость */
+.ConBlock__MinBlock::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+  background-size: 4px 4px;
+  mix-blend-mode: overlay;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Ссылки - твой оригинальный стиль */
+.nav-links {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: space-evenly;
+  align-items: center;
+  pointer-events: auto;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-weight: 500;
+}
+
+.nav-links a {
+  color: #000000;
+  text-decoration: none;
+  font-size: 17px;
+  text-align: center;
+  padding: 10px 50px;
+  background-color: rgba(207, 207, 207, 0.25);
+  transition: all 0.3s ease;
+  border-radius: 30px;
+  white-space: nowrap;
+  min-width: 90px;           /* добавил, чтобы кнопки не сжимались */
+}
+
+.nav-links a:hover,
+.nav-links a:focus {
+  background-color: rgba(82, 82, 82, 0.484);
+  color: #ffffff;
+  margin: 10px;
+  padding: 8px 48px;
+  border: 2px solid rgb(96, 96, 96);
+}
+
+/* ==================== АДАПТИВ ==================== */
+
+@media (max-width: 768px) {
+  .ConBlock__MinBlock {
+    width: 94%;
+    height: 62px;
+    border-radius: 9999px;
+  }
+
+  .nav-links a {
+    font-size: 15px;
+    padding: 9px 16px;
+    min-width: 78px;
+  }
+  .nav-links a:hover,
+.nav-links a:focus {
+  padding: 8px 14px;
+}
+}
+
+/* На очень маленьких экранах (iPhone SE и ниже) */
+@media (max-width: 480px) {
+  .ConBlock__MinBlock {
+    width: 92%;
+    height: 58px;
+  }
+
+  .nav-links a {
+    font-size: 14px;
+    padding: 8px 13px;
+    min-width: 70px;
+  }
+  .nav-links a:hover,
+.nav-links a:focus {
+  padding: 7px 12px;
+}
+
+}

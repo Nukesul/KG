@@ -4,25 +4,22 @@ import Home from "./components/Home";
 import Login from "./components/Login";
 import Admin from "./components/Admin";
 import ProtectedRoute from "./components/ProtectedRoute";
-import CinematicDiscover from "./components/CinematicDiscover";
-
+import Nav from "./components/Nav";
 export default function App() {
   return (
     <HashRouter>
       <Routes>
 
-        {/* ===== MAIN SITE ===== */}
         <Route path="/" element={
           <>
+            <Nav />
+
             <Home />
-            <CinematicDiscover />
           </>
         } />
         
-        {/* ===== AUTH ===== */}
         <Route path="/login" element={<Login />} />
 
-        {/* ===== PROTECTED ADMIN ===== */}
         <Route
           path="/admin"
           element={
@@ -32,7 +29,6 @@ export default function App() {
           }
         />
 
-        {/* ===== FALLBACK ===== */}
         <Route path="*" element={<Navigate to="/" replace />} />
 
       </Routes>

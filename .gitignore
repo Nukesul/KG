@@ -1,88 +1,2486 @@
-# ===============================
+// src/pages/Home.tsx
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import Tippy from "@tippyjs/react";
+import "tippy.js/dist/tippy.css";
 
-# Logs
+import "../styles/home.css";
+import logo from "../assets/logo.png";
+import { supabase } from "../lib/supabaseClient";
+import KyrgyzstanMap from "./KyrgyzstanMap";
 
-# ===============================
+const VIDEO_BASE_URL = "https://pub-d90782a2cc9c4ef6903dbc26fa37ea43.r2.dev/";
 
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+type MonthPost = {
+  id: number;
+  title: string | null;
+  content: string | null;
+  video_file: string | null;
+  created_at: string;
+  region: string | null;
+  season: string | null;
+  fact: string | null;
+  map_url: string | null;
+};
 
-# ===============================
+const MONTHS_SHORT_RU = [
+  "Янв",
+  "Фев",
+  "Мар",
+  "Апр",
+  "Май",
+  "Июн",
+  "Июл",
+  "Авг",
+  "Сен",
+  "Окт",
+  "Ноя",
+  "Дек",
+];
 
-# Node / Build
+function useViewportCSSVar() {
+  useLayoutEffect(() => {
+    const setVars = () => {
+      const h = window.visualViewport?.height ?? window.innerHeight;
+      document.documentElement.style.setProperty("--app-vh", `${h}px`);
+    };
+    setVars();
+    window.addEventListener("resize", setVars, { passive: true });
+    window.visualViewport?.addEventListener("resize", setVars, { passive: true });
+    return () => {
+      window.removeEventListener("resize", setVars);
+      window.visualViewport?.removeEventListener("resize", setVars);
+    };
+  }, []);
+}
 
-# ===============================
+function clampText(s: string, max = 110) {
+  const t = (s || "").trim();
+  return t.length <= max ? t : t.slice(0, max).trimEnd() + "…";
+}
 
-node_modules
-dist
-dist-ssr
-build
-*.local
-.env
-.env.*
+function seasonLabel(s?: string | null) {
+  const v = (s || "").toLowerCase();
+  const map: Record<string, string> = {
+    winter: "Зима",
+    spring: "Весна",
+    summer: "Лето",
+    autumn: "Осень",
+  };
+  return map[v] || "Сезон";
+}
 
-# ===============================
+function regionLabel(r?: string | null) {
+  const v = (r || "").toLowerCase();
+  const map: Record<string, string> = {
+    chui: "Чуй",
+    issyk_kul: "Иссык-Куль",
+    naryn: "Нарын",
+    osh: "Ош",
+    jalal_abad: "Жалал-Абад",
+    talas: "Талас",
+    batken: "Баткен",
+  };
+  return map[v] || "Область";
+}
 
-# Editor / OS files
+function useRafThrottled<T extends (...args: any[]) => void>(fn: T) {
+  const fnRef = useRef(fn);
+  fnRef.current = fn;
 
-# ===============================
+  const rafRef = useRef<number | null>(null);
+  const lastArgsRef = useRef<any[] | null>(null);
 
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-Thumbs.db
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+  return useCallback((...args: any[]) => {
+    lastArgsRef.current = args;
+    if (rafRef.current != null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const a = lastArgsRef.current || [];
+      fnRef.current(...a);
+    });
+  }, []);
+}
 
-# ===============================
+export default function Home() {
+  useViewportCSSVar();
 
-# Installers / binaries (IMPORTANT)
+  const [months, setMonths] = useState<MonthPost[]>([]);
+  const [current, setCurrent] = useState<MonthPost | null>(null);
 
-# ===============================
+  const [isPaused, setIsPaused] = useState(false);
+  const [muted, setMuted] = useState(true);
 
-*.exe
-*.msi
-*.dmg
-*.pkg
-*.deb
-*.rpm
-*.iso
-*.zip
-*.rar
-*.7z
+  const [cinema, setCinema] = useState(false);
+  const [uiVisible, setUiVisible] = useState(true);
 
-# ===============================
+  const [needsTapToStart, setNeedsTapToStart] = useState(false);
+  const [headerVisible, setHeaderVisible] = useState(true);
 
-# Large media (store externally)
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-# ===============================
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const interactingRef = useRef(false);
 
-*.mp4
-*.mov
-*.avi
-*.mkv
-*.webm
-*.wav
-*.flac
-*.psd
-*.ai
+  const uiRafRef = useRef<number | null>(null);
+  const lastShowTsRef = useRef<number>(0);
 
-# ===============================
+  const videoProgressElRef = useRef<HTMLDivElement>(null);
+  const scrollProgressElRef = useRef<HTMLDivElement>(null);
 
-# Cache / temp
+  // Header scroll (cheap)
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      setHeaderVisible(y <= lastScrollY);
+      lastScrollY = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
-# ===============================
+  // Load posts
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("posts")
+          .select("*")
+          .order("id", { ascending: true });
 
-.cache
-.tmp
-temp
-coverage
+        if (!alive) return;
+
+        if (error) {
+          console.error("Supabase load error:", error);
+          return;
+        }
+        const rows = (data || []) as MonthPost[];
+        setMonths(rows);
+        if (rows.length > 0) setCurrent(rows[0]);
+      } catch (err) {
+        console.error("Failed to load posts:", err);
+      }
+    };
+    load();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const activeRegion = useMemo(
+    () => (current?.region || "").toLowerCase() || null,
+    [current?.region]
+  );
+
+  const videoSrc = useMemo(
+    () => (current?.video_file ? `${VIDEO_BASE_URL}${current.video_file}` : null),
+    [current?.video_file]
+  );
+
+  const videoType = useMemo(() => {
+    if (!current?.video_file) return "";
+    const f = current.video_file.toLowerCase();
+    return f.endsWith(".webm") ? "video/webm" : "video/mp4";
+  }, [current?.video_file]);
+
+  const theme = useMemo(() => {
+    if (!current) return "t1";
+    return ["t1", "t2", "t3", "t4"][current.id % 4];
+  }, [current?.id]);
+
+  const clearHideTimer = useCallback(() => {
+    if (!hideTimerRef.current) return;
+    clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = null;
+  }, []);
+
+  const scheduleAutoHide = useCallback(() => {
+    if (cinema || needsTapToStart) return;
+    clearHideTimer();
+    hideTimerRef.current = setTimeout(() => {
+      if (interactingRef.current) return;
+      setUiVisible(false);
+    }, 2500);
+  }, [cinema, needsTapToStart, clearHideTimer]);
+
+  const showUI = useCallback(
+    (autoHide = true) => {
+      if (cinema) return;
+      setUiVisible(true);
+      clearHideTimer();
+      if (autoHide) scheduleAutoHide();
+    },
+    [cinema, clearHideTimer, scheduleAutoHide]
+  );
+
+  const onPointerActivity = useCallback(() => {
+    if (cinema) return;
+    const now = performance.now();
+    if (now - lastShowTsRef.current < 140) return;
+    lastShowTsRef.current = now;
+
+    if (uiRafRef.current) return;
+    uiRafRef.current = requestAnimationFrame(() => {
+      uiRafRef.current = null;
+      showUI(true);
+    });
+  }, [cinema, showUI]);
+
+  const tryPlay = useCallback(async () => {
+    const v = videoRef.current;
+    if (!v || isPaused || !videoSrc) return;
+
+    v.muted = muted;
+    v.playsInline = true;
+
+    try {
+      await v.play();
+      setNeedsTapToStart(false);
+    } catch (err) {
+      console.warn("Video play failed:", err);
+      setNeedsTapToStart(true);
+      setUiVisible(true);
+      clearHideTimer();
+    }
+  }, [muted, isPaused, videoSrc, clearHideTimer]);
+
+  const changeMonth = useCallback(
+    (m: MonthPost) => {
+      if (!current || m.id === current.id) return;
+
+      setNeedsTapToStart(false);
+      setUiVisible(true);
+      scheduleAutoHide();
+
+      setCurrent(m);
+
+      // сброс прогресса без setState (без перерендеров)
+      if (videoProgressElRef.current) videoProgressElRef.current.style.width = "0%";
+    },
+    [current, scheduleAutoHide]
+  );
+
+  const selectByRegion = useCallback(
+    (regionId: string) => {
+      const r = (regionId || "").toLowerCase();
+      if (!r || months.length === 0) return;
+
+      const candidates = months.filter(
+        (p) => (p.region || "").toLowerCase() === r
+      );
+      if (candidates.length === 0) return;
+
+      if (current && (current.region || "").toLowerCase() === r) {
+        const idx = candidates.findIndex((p) => p.id === current.id);
+        const next = candidates[(idx + 1) % candidates.length];
+        if (next) changeMonth(next);
+        return;
+      }
+
+      changeMonth(candidates[0]);
+    },
+    [months, current, changeMonth]
+  );
+
+  const goNext = useCallback(() => {
+    if (!months.length || !current) return;
+    const idx = months.findIndex((x) => x.id === current.id);
+    if (idx === -1) return;
+    const next = months[(idx + 1) % months.length];
+    if (next) changeMonth(next);
+  }, [months, current, changeMonth]);
+
+  const goPrev = useCallback(() => {
+    if (!months.length || !current) return;
+    const idx = months.findIndex((x) => x.id === current.id);
+    if (idx === -1) return;
+    const prev = months[idx === 0 ? months.length - 1 : idx - 1];
+    if (prev) changeMonth(prev);
+  }, [months, current, changeMonth]);
+
+  const togglePause = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    if (isPaused) {
+      setIsPaused(false);
+      tryPlay();
+    } else {
+      v.pause();
+      setIsPaused(true);
+    }
+    showUI(true);
+  }, [isPaused, tryPlay, showUI]);
+
+  const toggleMuted = useCallback(() => {
+    const v = videoRef.current;
+    const next = !muted;
+    setMuted(next);
+    if (v) v.muted = next;
+    showUI(true);
+  }, [muted, showUI]);
+
+  const toggleCinema = useCallback(() => {
+    setCinema((prev) => {
+      const next = !prev;
+      if (next) {
+        setUiVisible(false);
+        clearHideTimer();
+      } else {
+        setUiVisible(true);
+        scheduleAutoHide();
+      }
+      return next;
+    });
+  }, [clearHideTimer, scheduleAutoHide]);
+
+  const onRootClick = useCallback(() => {
+    if (cinema) {
+      setCinema(false);
+      setUiVisible(true);
+      scheduleAutoHide();
+      return;
+    }
+    showUI(true);
+  }, [cinema, scheduleAutoHide, showUI]);
+
+  // Keyboard
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      switch (e.code) {
+        case "Space":
+          e.preventDefault();
+          togglePause();
+          break;
+        case "KeyM":
+          toggleMuted();
+          break;
+        case "KeyC":
+          toggleCinema();
+          break;
+        case "ArrowRight":
+          goNext();
+          break;
+        case "ArrowLeft":
+          goPrev();
+          break;
+        case "Escape":
+          if (cinema) {
+            setCinema(false);
+            setUiVisible(true);
+            scheduleAutoHide();
+          }
+          break;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [togglePause, toggleMuted, toggleCinema, goNext, goPrev, cinema, scheduleAutoHide]);
+
+  // Autoplay on current change
+  useEffect(() => {
+    if (!current) return;
+    tryPlay();
+  }, [current, tryPlay]);
+
+  // Months scroll progress (rAF throttled, no spam setState)
+  const updateScrollProgress = useRafThrottled(() => {
+    const el = scrollRef.current;
+    if (!el || !scrollProgressElRef.current) return;
+    const max = el.scrollWidth - el.clientWidth;
+    const pct = max > 0 ? (el.scrollLeft / max) * 100 : 0;
+    scrollProgressElRef.current.style.width = `${pct}%`;
+    el.classList.toggle(
+      "scrolled-to-end",
+      el.scrollLeft + el.clientWidth >= el.scrollWidth - 8
+    );
+  });
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", updateScrollProgress, { passive: true });
+    updateScrollProgress();
+    return () => el.removeEventListener("scroll", updateScrollProgress);
+  }, [months, updateScrollProgress]);
+
+  // Center active month
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !current) return;
+    const btn = el.querySelector<HTMLButtonElement>(
+      `button[data-id="${current.id}"]`
+    );
+    if (!btn) return;
+    const left = btn.offsetLeft - (el.clientWidth - btn.clientWidth) / 2;
+    el.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+  }, [current?.id]);
+
+  // Video progress (rAF throttled, no setState)
+  const updateVideoProgress = useRafThrottled(() => {
+    const v = videoRef.current;
+    const bar = videoProgressElRef.current;
+    if (!v || !bar || !v.duration) return;
+    const pct = (v.currentTime / v.duration) * 100;
+    bar.style.width = `${pct}%`;
+  });
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      if (uiRafRef.current) cancelAnimationFrame(uiRafRef.current);
+    };
+  }, []);
+
+  if (!current) {
+    return (
+      <div className="home-loading">
+        <div className="home-loading-card">
+          <div className="home-loading-title">Загрузка…</div>
+          <div className="home-loading-sub">Пожалуйста, подождите</div>
+        </div>
+      </div>
+    );
+  }
+
+  const preview = clampText(current.content || "", 140);
+  const fact = clampText(current.fact || "", 110);
+
+  const onUIEnter = () => {
+    interactingRef.current = true;
+    showUI(false);
+  };
+  const onUILeave = () => {
+    interactingRef.current = false;
+    scheduleAutoHide();
+  };
+
+  return (
+    <div
+      className={`fs-shell ${theme} ${cinema ? "cinema" : ""}`}
+      onPointerMove={onPointerActivity}
+      onClick={onRootClick}
+    >
+      <div className="video-layer">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`video-wrap-${current.id}`}
+            className="video-wrapper"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            style={{ position: "absolute", inset: 0 }}
+          >
+            <video
+              key={`video-${current.id}`}
+              ref={videoRef}
+              className="hero-video"
+              muted={muted}
+              playsInline
+              preload="metadata"
+              autoPlay
+              onCanPlay={tryPlay}
+              onEnded={() => {
+                if (!isPaused) goNext();
+              }}
+              onTimeUpdate={updateVideoProgress}
+            >
+              {videoSrc && <source src={videoSrc} type={videoType} />}
+            </video>
+          </motion.div>
+        </AnimatePresence>
+
+        <div
+          className={`overlay ${
+            uiVisible && !cinema ? "overlay-strong" : "overlay-weak"
+          } ${cinema ? "overlay-cinema" : ""}`}
+        />
+        <div className={`vignette ${cinema ? "vignette-cinema" : ""}`} />
+        <div className="grain" aria-hidden="true" />
+
+        <div className="video-progress-container" aria-hidden="true">
+          <div className="video-progress" ref={videoProgressElRef} style={{ width: "0%" }} />
+        </div>
+      </div>
+
+      <header
+        className={`header ${uiVisible && !cinema ? "" : "hidden-ui"} ${
+          headerVisible ? "" : "header-scroll-hidden"
+        }`}
+        onPointerEnter={onUIEnter}
+        onPointerLeave={onUILeave}
+      >
+        <img src={logo} alt="Кыргызстан" className="logo" />
+      </header>
+
+      {/* ВАЖНО: стопаем bubbling, иначе клики по карте будут триггерить root */}
+      <div
+        className={`map-slot ${cinema ? "cinema-hidden" : ""}`}
+        onPointerEnter={onUIEnter}
+        onPointerLeave={onUILeave}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <KyrgyzstanMap
+          activeRegion={activeRegion}
+          mapUrl={current.map_url}
+          onSelectRegion={selectByRegion}
+        />
+      </div>
+
+      <AnimatePresence>
+        {needsTapToStart && !cinema && (
+          <motion.div
+            className="tap-to-start"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 0.96, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              tryPlay();
+            }}
+          >
+            Нажми, чтобы запустить видео
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {uiVisible && !cinema && (
+          <motion.section
+            className="mini-info"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            onClick={(e) => e.stopPropagation()}
+            onPointerEnter={onUIEnter}
+            onPointerLeave={onUILeave}
+          >
+            <div className="mini-top">
+              <h1 className="mini-title">{current.title || "Кыргызстан"}</h1>
+              <div className="mini-badges">
+                <span className="badge">{regionLabel(current.region)}</span>
+                <span className="badge season">{seasonLabel(current.season)}</span>
+              </div>
+            </div>
+            {fact ? <p className="mini-fact">💡 {fact}</p> : null}
+            {preview ? <p className="mini-desc">{preview}</p> : null}
+          </motion.section>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {uiVisible && !cinema && (
+          <motion.div
+            className="controls"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            onClick={(e) => e.stopPropagation()}
+            onPointerEnter={onUIEnter}
+            onPointerLeave={onUILeave}
+          >
+            <button
+              className="ctrl-btn"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                togglePause();
+              }}
+              aria-label={isPaused ? "Воспроизвести" : "Пауза"}
+              title={isPaused ? "Play (Space)" : "Pause (Space)"}
+            >
+              {isPaused ? "▶" : "❚❚"}
+            </button>
+
+            <button
+              className="ctrl-btn secondary"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleMuted();
+              }}
+              aria-label={muted ? "Включить звук" : "Выключить звук"}
+              title="Mute (M)"
+            >
+              {muted ? "🔇" : "🔊"}
+            </button>
+
+            <button
+              className="ctrl-btn secondary"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleCinema();
+              }}
+              aria-label="Кино-режим"
+              title={cinema ? "Exit cinema (Esc)" : "Cinema (C)"}
+            >
+              🎬
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <footer
+        className={`months-bar ${uiVisible && !cinema ? "" : "hidden-ui"}`}
+        onClick={(e) => e.stopPropagation()}
+        onPointerEnter={onUIEnter}
+        onPointerLeave={onUILeave}
+      >
+        <div className="months-scroll" ref={scrollRef}>
+          {months.map((m) => {
+            const active = current.id === m.id;
+            return (
+              <Tippy key={m.id} content={m.title || ""} placement="top" delay={[250, 0]}>
+                <button
+                  type="button"
+                  data-id={m.id}
+                  className={`month-btn ${active ? "active" : ""}`}
+                  onClick={() => changeMonth(m)}
+                >
+                  {MONTHS_SHORT_RU[(Number(m.id) - 1) % 12] || "???"}
+                </button>
+              </Tippy>
+            );
+          })}
+
+          <div className="scroll-hint" aria-hidden="true">
+            <svg viewBox="0 0 24 24" className="scroll-arrow">
+              <path
+                d="M8 5l8 7-8 7"
+                stroke="currentColor"
+                strokeWidth="2.25"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+        </div>
+
+        <div className="scroll-indicator" aria-hidden="true">
+          <div className="scroll-progress" ref={scrollProgressElRef} style={{ width: "0%" }} />
+        </div>
+      </footer>
+
+      <AnimatePresence>
+        {cinema && (
+          <motion.div
+            className="cinema-hint"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.78 }}
+            exit={{ opacity: 0 }}
+          >
+            Тапни в любом месте, чтобы выйти
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* src/styles/home.css */
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&display=swap");
+
+:root {
+  --primary: #e32636;
+  --accent: #ffd700;
+  --white: #fff;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  --app-vh: 100vh;
+  --bar-h: 92px;
+  --radius: 18px;
+
+  --sky: rgba(80, 170, 255, 0.22);
+  --sun: rgba(255, 200, 80, 0.22);
+  --rose: rgba(255, 90, 140, 0.16);
+  --mint: rgba(60, 255, 200, 0.14);
+
+  --stroke-soft: rgba(255, 255, 255, 0.22);
+  --shadow: 0 18px 46px rgba(0, 0, 0, 0.18);
+
+  --text: rgba(255, 255, 255, 0.95);
+  --text-soft: rgba(255, 255, 255, 0.88);
+
+  --btn: rgba(255, 255, 255, 0.14);
+  --btn-hover: rgba(255, 255, 255, 0.22);
+
+  /* Свет/оверлей — мягче, меньше “грязи” */
+  --overlay-alpha-strong: 0.085;
+  --overlay-alpha-weak: 0.045;
+
+  /* Производительность: blur уменьшаем */
+  --glass-blur: 10px;
+  --glass-blur-strong: 12px;
+}
+
+.fs-shell.t1 {
+  --a1: var(--sun);
+  --a2: rgba(255, 215, 0, 0.16);
+  --prog: rgba(255, 215, 0, 0.7);
+}
+.fs-shell.t2 {
+  --a1: var(--sky);
+  --a2: var(--mint);
+  --prog: rgba(80, 170, 255, 0.7);
+}
+.fs-shell.t3 {
+  --a1: rgba(160, 90, 255, 0.16);
+  --a2: rgba(255, 150, 0, 0.16);
+  --prog: rgba(160, 90, 255, 0.7);
+}
+.fs-shell.t4 {
+  --a1: var(--rose);
+  --a2: rgba(0, 200, 255, 0.14);
+  --prog: rgba(255, 90, 140, 0.7);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html,
+body {
+  height: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: "Montserrat", system-ui, -apple-system, sans-serif;
+  background: #000;
+  color: var(--text);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.fs-shell {
+  position: relative;
+  width: 100vw;
+  height: var(--app-vh);
+  height: 100svh;
+  overflow: hidden;
+}
+
+/* Video */
+.video-layer {
+  position: absolute;
+  inset: 0;
+}
+.hero-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* overlay */
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+.overlay-strong {
+  opacity: 1;
+  background: radial-gradient(900px 620px at 18% 18%, var(--a1), transparent 62%),
+    radial-gradient(900px 720px at 84% 78%, var(--a2), transparent 66%),
+    linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, var(--overlay-alpha-strong)),
+      rgba(255, 255, 255, 0) 55%,
+      rgba(0, 0, 0, 0) 100%
+    );
+}
+.overlay-weak {
+  opacity: 1;
+  background: radial-gradient(
+      900px 620px at 18% 18%,
+      rgba(255, 255, 255, var(--overlay-alpha-weak)),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 720px at 84% 78%,
+      rgba(255, 255, 255, var(--overlay-alpha-weak)),
+      transparent 64%
+    );
+}
+.overlay-cinema {
+  opacity: 0 !important;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  background: radial-gradient(circle at 50% 45%, transparent 66%, rgba(0, 0, 0, 0.22));
+}
+.vignette-cinema {
+  opacity: 0;
+}
+
+/* Grain: меньше нагрузка — медленнее и слабее */
+.grain {
+  position: absolute;
+  inset: -20%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.14'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+  opacity: 0.02;
+  pointer-events: none;
+  transform: translateZ(0);
+  animation: grainMove 14s steps(8) infinite;
+  will-change: transform;
+}
+@keyframes grainMove {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  25% {
+    transform: translate3d(-1.2%, 0.8%, 0);
+  }
+  50% {
+    transform: translate3d(-0.8%, -1.2%, 0);
+  }
+  75% {
+    transform: translate3d(1.2%, 0.8%, 0);
+  }
+}
+
+/* Header */
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding-top: var(--safe-top);
+  height: clamp(60px, 10vh, 86px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.header.hidden-ui {
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+}
+.header.header-scroll-hidden {
+  transform: translateY(-100%);
+}
+.logo {
+  width: clamp(120px, 24vw, 190px);
+  height: auto;
+  filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.22));
+}
+
+/* Mini info */
+.mini-info {
+  position: absolute;
+  top: clamp(72px, 10vh, 120px);
+  left: clamp(12px, 4vw, 32px);
+  right: clamp(12px, 4vw, 32px);
+  max-width: 660px;
+  z-index: 20;
+
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.11));
+  border: 1px solid var(--stroke-soft);
+  backdrop-filter: blur(var(--glass-blur-strong));
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.mini-info::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(520px 220px at 14% 18%, rgba(255, 255, 255, 0.14), transparent 60%),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.04));
+  opacity: 0.62;
+}
+
+.mini-top {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+.mini-title {
+  font-size: clamp(1.12rem, 4.2vw, 1.95rem);
+  font-weight: 600;
+  line-height: 1.15;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.22);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.mini-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.badge {
+  font-size: 0.82rem;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  white-space: nowrap;
+  backdrop-filter: blur(var(--glass-blur));
+  color: rgba(255, 255, 255, 0.98);
+}
+.badge.season {
+  background: rgba(255, 215, 0, 0.14);
+  border-color: rgba(255, 215, 0, 0.22);
+}
+.mini-fact {
+  position: relative;
+  margin-top: 8px;
+  font-size: 0.96rem;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.16);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.mini-desc {
+  position: relative;
+  margin-top: 6px;
+  color: var(--text-soft);
+  line-height: 1.48;
+  font-weight: 300;
+  font-size: 0.96rem;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.14);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Tap to start */
+.tap-to-start {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(50% - 20px);
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 10px 14px;
+  border-radius: 999px;
+  backdrop-filter: blur(var(--glass-blur-strong));
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Controls */
+.controls {
+  position: absolute;
+  left: clamp(12px, 4vw, 32px);
+  bottom: calc(var(--bar-h) + var(--safe-bottom) + 14px);
+  z-index: 25;
+  display: flex;
+  gap: 10px;
+}
+.ctrl-btn {
+  border: none;
+  cursor: pointer;
+  background: var(--btn);
+  color: var(--white);
+  padding: 10px 14px;
+  border-radius: 14px;
+  min-width: 54px;
+  font-size: 1rem;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  transition: transform 0.12s ease, background 0.12s ease;
+  touch-action: manipulation;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(var(--glass-blur-strong));
+}
+.ctrl-btn:hover {
+  background: var(--btn-hover);
+  transform: translateY(-1px);
+}
+.ctrl-btn.secondary {
+  background: rgba(255, 255, 255, 0.12);
+}
+.ctrl-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Months bar */
+.months-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--bar-h) + var(--safe-bottom));
+  padding: 10px 12px calc(10px + var(--safe-bottom)) 12px;
+
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.08) 40%, rgba(0, 0, 0, 0)),
+    linear-gradient(to top, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.06));
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+  z-index: 35;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  backdrop-filter: blur(var(--glass-blur-strong));
+}
+.months-bar.hidden-ui {
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+}
+
+.months-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 8px 0 10px 0;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  touch-action: pan-x;
+}
+.months-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.month-btn {
+  flex: 0 0 auto;
+  min-width: 72px;
+  padding: 12px 14px;
+  border: none;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.96);
+  font-weight: 700;
+  font-size: 0.98rem;
+  cursor: pointer;
+  scroll-snap-align: center;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
+  transition: transform 0.12s ease, background 0.12s ease;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(var(--glass-blur-strong));
+}
+.month-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+.month-btn.active {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.34);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
+}
+
+.scroll-hint {
+  position: sticky;
+  right: 0;
+  padding-left: 14px;
+  background: linear-gradient(to left, rgba(255, 255, 255, 0.18), transparent);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: opacity 0.18s ease;
+}
+.months-scroll.scrolled-to-end .scroll-hint {
+  opacity: 0;
+}
+
+.scroll-arrow {
+  width: 22px;
+  height: 22px;
+  color: rgba(255, 255, 255, 0.92);
+  opacity: 0.8;
+  animation: pulse 1.4s infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(5px);
+  }
+}
+
+.scroll-indicator {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.scroll-progress {
+  height: 100%;
+  width: 0%;
+  background: var(--prog);
+  transition: width 0.16s ease;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.14);
+}
+
+/* Cinema */
+.fs-shell.cinema {
+  cursor: none;
+}
+
+.cinema-hint {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--safe-bottom) + 18px);
+  z-index: 70;
+
+  background: rgba(255, 255, 255, 0.16);
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  backdrop-filter: blur(var(--glass-blur-strong));
+  user-select: none;
+}
+
+/* Video progress */
+.video-progress-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.2);
+  z-index: 10;
+}
+.video-progress {
+  height: 100%;
+  background: var(--prog);
+  transition: width 0.1s linear;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.16);
+}
+
+/* Map */
+.map-slot {
+  position: absolute;
+  right: clamp(12px, 3vw, 22px);
+  top: clamp(84px, 12vh, 146px);
+  z-index: 22;
+}
+.map-slot.cinema-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.kg-map {
+  width: clamp(160px, 22vw, 250px);
+  padding: 10px 10px 8px 10px;
+  border-radius: 16px;
+
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(var(--glass-blur-strong));
+  box-shadow: var(--shadow);
+}
+.kg-map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  gap: 8px;
+}
+.kg-map-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  opacity: 0.92;
+}
+
+.kg-map-link {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.95);
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  white-space: nowrap;
+}
+.kg-map-link:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.kg-map-svg {
+  width: 100%;
+  height: auto;
+}
+
+.kg-regions path {
+  cursor: pointer;
+  outline: none;
+
+  fill: rgba(255, 255, 255, 0.1);
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 1;
+
+  transition: fill 0.12s ease, stroke 0.12s ease, filter 0.12s ease, transform 0.12s ease;
+}
+.kg-regions path:hover {
+  fill: rgba(255, 255, 255, 0.16);
+  stroke: rgba(255, 255, 255, 0.28);
+  transform: translateY(-0.35px);
+}
+.kg-regions path:focus-visible {
+  stroke: rgba(255, 255, 255, 0.48);
+  stroke-width: 1.6;
+}
+
+.kg-map[data-active="naryn"] #naryn,
+.kg-map[data-active="issyk_kul"] #issyk_kul,
+.kg-map[data-active="osh"] #osh,
+.kg-map[data-active="jalal_abad"] #jalal_abad,
+.kg-map[data-active="talas"] #talas,
+.kg-map[data-active="chui"] #chui,
+.kg-map[data-active="batken"] #batken {
+  fill: rgb(255, 255, 0);
+  stroke: rgb(238, 255, 0);
+  filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.55));
+  transform: translateY(-0.4px);
+}
+
+.kg-map-active {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  opacity: 0.86;
+}
+
+/* Mobile */
+@media (max-width: 680px) {
+  :root {
+    --bar-h: 94px;
+  }
+
+  .month-btn {
+    min-width: 64px;
+    font-size: 0.92rem;
+    padding: 12px 12px;
+  }
+  .controls {
+    left: 12px;
+    bottom: calc(var(--bar-h) + var(--safe-bottom) + 14px);
+    gap: 8px;
+  }
+  .ctrl-btn {
+    min-width: 48px;
+    padding: 10px 12px;
+  }
+  .mini-info {
+    max-width: none;
+  }
+
+  .map-slot {
+    top: auto;
+    bottom: calc(var(--bar-h) + var(--safe-bottom) + 14px);
+    right: 12px;
+  }
+  .kg-map {
+    width: 184px;
+    max-width: 184px;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabaseClient";
+import "../styles/Admin.css";
+
+// =====================
+// Types
+// =====================
+type PostRow = {
+  id: number;
+  created_at: string;
+  title: string | null;
+  content: string | null;
+  image_file: string | null;     // ← Заменили video_file на image_file
+  region: string | null;
+  season: string | null;
+  fact: string | null;
+  map_region: string | null;
+  map_url: string | null;
+};
+
+type SortKey = "id" | "created_at" | "title" | "region" | "season" | "fact";
+type SortConfig = { key: SortKey; direction: "asc" | "desc" };
+
+const WORKER_BASE_URL = (import.meta.env.VITE_WORKER_BASE_URL as string) || "";
+
+// =====================
+// Constants
+// =====================
+const REGIONS = [
+  { v: "chui", label: "Чуй" },
+  { v: "issyk_kul", label: "Иссык-Куль" },
+  { v: "naryn", label: "Нарын" },
+  { v: "osh", label: "Ош" },
+  { v: "jalal_abad", label: "Жалал-Абад" },
+  { v: "talas", label: "Талас" },
+  { v: "batken", label: "Баткен" },
+] as const;
+
+const SEASONS = [
+  { v: "winter", label: "Зима" },
+  { v: "spring", label: "Весна" },
+  { v: "summer", label: "Лето" },
+  { v: "autumn", label: "Осень" },
+] as const;
+
+// =====================
+// Helpers
+// =====================
+function clsx(...xs: Array<string | false | undefined | null>) {
+  return xs.filter(Boolean).join(" ");
+}
+
+function stripTrailingSlash(s: string) {
+  return s.replace(/\/$/, "");
+}
+
+function humanFileSize(bytes: number) {
+  const units = ["B", "KB", "MB", "GB"];
+  let n = bytes;
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function regionLabel(v: string | null) {
+  return REGIONS.find((x) => x.v === v)?.label || (v || "—");
+}
+function seasonLabel(v: string | null) {
+  return SEASONS.find((x) => x.v === v)?.label || (v || "—");
+}
+
+// Новая валидация для картинки
+function validateImageFile(f: File | null) {
+  if (!f) return "";
+  const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  if (!allowed.includes(f.type)) {
+    return `Неподдерживаемый формат: ${f.type || "unknown"}. Разрешено: jpg, png, webp, gif`;
+  }
+  const MAX = 15 * 1024 * 1024; // 15 МБ
+  if (f.size > MAX) {
+    return `Файл слишком большой: ${humanFileSize(f.size)}. Максимум: ${humanFileSize(MAX)}`;
+  }
+  return "";
+}
+
+async function getJwtOrThrow() {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw new Error(error.message);
+  const jwt = data.session?.access_token;
+  if (!jwt) throw new Error("Not authenticated");
+  return jwt;
+}
+
+// =====================
+// Icons (minimal, clean)
+// =====================
+function Icon({
+  name,
+  className,
+}: {
+  name:
+  | "search"
+  | "plus"
+  | "refresh"
+  | "logout"
+  | "pencil"
+  | "trash"
+  | "upload"
+  | "x"
+  | "check"
+  | "alert"
+  | "chevDown"
+  | "chevUp"
+  | "image"      // ← изменили video на image
+  | "filter"
+  | "spark";
+  className?: string;
+}) {
+  const c = clsx("i", className || "i-16");
+  switch (name) {
+    case "search":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M10.5 18.5a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z" stroke="currentColor" strokeWidth="2" />
+          <path d="M16.5 16.5 21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case "plus":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case "refresh":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M21 3v7h-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "logout":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M10 7V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-1" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <path d="M15 12H3m0 0 3-3M3 12l3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "pencil":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+        </svg>
+      );
+    case "trash":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M3 6h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case "upload":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M7 8l5-5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case "x":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case "check":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M20 6 9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "alert":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M12 9v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M12 17h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M10.3 3.6 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+        </svg>
+      );
+    case "chevDown":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "chevUp":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M18 15l-6-6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "image":   // ← новый иконка для картинки
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Z" stroke="currentColor" strokeWidth="2" />
+          <path d="M9 11l3 3 7-7" stroke="currentColor" strokeWidth="2" />
+          <circle cx="9" cy="9" r="2" stroke="currentColor" strokeWidth="2" />
+        </svg>
+      );
+    case "filter":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M4 6h16M7 12h10M10 18h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case "spark":
+      return (
+        <svg className={c} viewBox="0 0 24 24" fill="none">
+          <path d="M12 2l1.6 6.2L20 10l-6.4 1.8L12 18l-1.6-6.2L4 10l6.4-1.8L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+// =====================
+// Small UI (остальное без изменений)
+// =====================
+function Chip({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "ok" | "warn" | "danger" | "info" }) {
+  return <span className={clsx("chip", `chip-${tone}`)}>{children}</span>;
+}
+
+function Toast({ kind, message, onClose }: { kind: "success" | "error"; message: string; onClose: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -10, scale: 0.98 }}
+      className={clsx("toast", kind === "success" ? "toast-success" : "toast-error")}
+      role="status"
+      aria-live="polite"
+    >
+      <div className="toast-ic">{kind === "success" ? <Icon name="check" /> : <Icon name="alert" />}</div>
+      <div className="toast-body">
+        <div className="toast-title">{kind === "success" ? "Готово" : "Ошибка"}</div>
+        <div className="toast-msg">{message}</div>
+      </div>
+      <button className="iconBtn" onClick={onClose} aria-label="Закрыть">
+        <Icon name="x" />
+      </button>
+    </motion.div>
+  );
+}
+
+function Modal({ open, title, children, onClose, footer, wide }: {
+  open: boolean;
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+  footer?: React.ReactNode;
+  wide?: boolean;
+}) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div className="modalBackdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+          <motion.div className={clsx("modal", wide && "modalWide")} initial={{ opacity: 0, y: 12, scale: 0.99 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.99 }}>
+            <div className="modalHead">
+              <div className="modalTitle">{title}</div>
+              <button className="iconBtn" onClick={onClose} aria-label="Закрыть">
+                <Icon name="x" />
+              </button>
+            </div>
+            <div className="modalBody">{children}</div>
+            {footer && <div className="modalFoot">{footer}</div>}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function ConfirmDialog({ open, title, description, confirmText, danger, busy, onCancel, onConfirm }: {
+  open: boolean;
+  title: string;
+  description: string;
+  confirmText: string;
+  danger?: boolean;
+  busy?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Modal open={open} title={title} onClose={busy ? () => {} : onCancel} footer={
+      <div className="row rowEnd gap8">
+        <button className="btn btnGhost" onClick={onCancel} disabled={busy}>Отмена</button>
+        <button className={clsx("btn", danger ? "btnDanger" : "btnPrimary")} onClick={onConfirm} disabled={busy}>
+          {busy ? "Подождите..." : confirmText}
+        </button>
+      </div>
+    }>
+      <div className="muted">{description}</div>
+    </Modal>
+  );
+}
+
+function Field({ label, hint, error, children }: {
+  label: string;
+  hint?: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="field">
+      <div className="fieldTop">
+        <div className="fieldLabel">{label}</div>
+        {hint ? <div className="fieldHint">{hint}</div> : null}
+      </div>
+      {children}
+      {error ? <div className="fieldError">{error}</div> : null}
+    </div>
+  );
+}
+
+// =====================
+// Main Admin
+// =====================
+export default function Admin() {
+  const navigate = useNavigate();
+
+  // data
+  const [rows, setRows] = useState<PostRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // list controls
+  const [query, setQuery] = useState("");
+  const [regionFilter, setRegionFilter] = useState<string>("all");
+  const [seasonFilter, setSeasonFilter] = useState<string>("all");
+  const [sort, setSort] = useState<SortConfig>({ key: "id", direction: "desc" });
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
+
+  // busy flags
+  const [savingText, setSavingText] = useState(false);
+  const [uploadingCreate, setUploadingCreate] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false); // ← было uploadingVideo
+  const isBusy = savingText || uploadingCreate || uploadingImage;
+
+  // toast
+  const [toastSuccess, setToastSuccess] = useState("");
+  const [toastError, setToastError] = useState("");
+
+  // drawer (create)
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [region, setRegion] = useState("naryn");
+  const [season, setSeason] = useState("winter");
+  const [fact, setFact] = useState("");
+  const [mapUrl, setMapUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [uploadPct, setUploadPct] = useState(0);
+  const xhrRef = useRef<XMLHttpRequest | null>(null);
+
+  // edit modal
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [editImageFile, setEditImageFile] = useState("");     // ← было editVideoFile
+  const [editRegion, setEditRegion] = useState("naryn");
+  const [editSeason, setEditSeason] = useState("winter");
+  const [editFact, setEditFact] = useState("");
+  const [editMapUrl, setEditMapUrl] = useState("");
+  const [editFormErrors, setEditFormErrors] = useState<Record<string, string>>({});
+  const [editFile, setEditFile] = useState<File | null>(null);
+  const [editUploadPct, setEditUploadPct] = useState(0);
+  const editXhrRef = useRef<XMLHttpRequest | null>(null);
+
+  // confirm delete
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+
+  const isEditing = editingId !== null;
+
+  const load = async () => {
+    setToastError("");
+    setToastSuccess("");
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from("posts")
+      .select("id, created_at, title, content, image_file, region, season, fact, map_region, map_url")  // ← image_file
+      .order("id", { ascending: false });
+
+    if (error) {
+      setToastError(error.message);
+      setLoading(false);
+      return;
+    }
+
+    setRows((data || []) as PostRow[]);
+    setLoading(false);
+    setCurrentPage(1);
+  };
+
+  useEffect(() => {
+    load();
+    return () => {
+      if (xhrRef.current && xhrRef.current.readyState !== 4) xhrRef.current.abort();
+      if (editXhrRef.current && editXhrRef.current.readyState !== 4) editXhrRef.current.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (toastSuccess) {
+      const t = setTimeout(() => setToastSuccess(""), 2800);
+      return () => clearTimeout(t);
+    }
+  }, [toastSuccess]);
+
+  useEffect(() => {
+    if (toastError) {
+      const t = setTimeout(() => setToastError(""), 5200);
+      return () => clearTimeout(t);
+    }
+  }, [toastError]);
+
+  // filtering + sorting (без изменений)
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((r) => {
+      const matchesQuery = !q ||
+        (r.title || "").toLowerCase().includes(q) ||
+        (r.content || "").toLowerCase().includes(q) ||
+        (r.fact || "").toLowerCase().includes(q);
+
+      const matchesRegion = regionFilter === "all" ? true : (r.region || "") === regionFilter;
+      const matchesSeason = seasonFilter === "all" ? true : (r.season || "") === seasonFilter;
+
+      return matchesQuery && matchesRegion && matchesSeason;
+    });
+  }, [rows, query, regionFilter, seasonFilter]);
+
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      const dir = sort.direction === "asc" ? 1 : -1;
+      if (sort.key === "created_at") {
+        const ta = new Date(a.created_at).getTime();
+        const tb = new Date(b.created_at).getTime();
+        return (ta < tb ? -1 : ta > tb ? 1 : 0) * dir;
+      }
+      const ka = a[sort.key] as any;
+      const kb = b[sort.key] as any;
+      const va = (ka ?? "") as string | number;
+      const vb = (kb ?? "") as string | number;
+      if (typeof va === "number" && typeof vb === "number") {
+        return (va < vb ? -1 : va > vb ? 1 : 0) * dir;
+      }
+      const sa = String(va).toLowerCase();
+      const sb = String(vb).toLowerCase();
+      return (sa < sb ? -1 : sa > sb ? 1 : 0) * dir;
+    });
+    return arr;
+  }, [filtered, sort]);
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / itemsPerPage));
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return sorted.slice(start, start + itemsPerPage);
+  }, [sorted, currentPage]);
+
+  useEffect(() => {
+    if (currentPage > pageCount) setCurrentPage(pageCount);
+  }, [pageCount, currentPage]);
+
+  const requestSort = (key: SortKey) => {
+    setSort((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === "asc" ? "desc" : "asc" };
+      }
+      const direction: "asc" | "desc" = key === "id" || key === "created_at" ? "desc" : "asc";
+      return { key, direction };
+    });
+  };
+
+  const stats = useMemo(() => {
+    const total = rows.length;
+    const withImage = rows.filter((r) => !!r.image_file).length;  // ← withVideo → withImage
+    const byRegion: Record<string, number> = {};
+    for (const r of rows) {
+      const key = r.region || "unknown";
+      byRegion[key] = (byRegion[key] || 0) + 1;
+    }
+    const topRegion = Object.entries(byRegion).sort((a, b) => b[1] - a[1])[0]?.[0] || "—";
+    return { total, withImage, topRegion };
+  }, [rows]);
+
+  // create validation
+  const validateCreateForm = () => {
+    const errors: Record<string, string> = {};
+    if (!title.trim()) errors.title = "Заполни Title";
+    if (!content.trim()) errors.content = "Заполни Content";
+    if (!region.trim()) errors.region = "Выбери region";
+    if (!season.trim()) errors.season = "Выбери season";
+    if (!fact.trim()) errors.fact = "Заполни fact (1 строка)";
+    if (!file) errors.file = "Выбери изображение";
+    if (file) {
+      const v = validateImageFile(file);
+      if (v) errors.file = v;
+    }
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const createViaWorker = async () => {
+    if (!validateCreateForm()) return;
+
+    setUploadingCreate(true);
+    setUploadPct(0);
+    setToastError("");
+    setToastSuccess("");
+
+    try {
+      if (!WORKER_BASE_URL) throw new Error("Не задан VITE_WORKER_BASE_URL");
+      const jwt = await getJwtOrThrow();
+
+      const fd = new FormData();
+      fd.append("title", title.trim());
+      fd.append("content", content.trim());
+      fd.append("region", region);
+      fd.append("season", season);
+      fd.append("fact", fact.trim());
+      fd.append("map_url", mapUrl.trim());
+      fd.append("map_region", region);
+      fd.append("file", file!);
+
+      const url = `${stripTrailingSlash(WORKER_BASE_URL)}/api/admin/create-post`;
+
+      const xhr = new XMLHttpRequest();
+      xhrRef.current = xhr;
+
+      const result = await new Promise<{ ok: boolean; status: number; body: any }>((resolve) => {
+        xhr.open("POST", url, true);
+        xhr.setRequestHeader("Authorization", `Bearer ${jwt}`);
+
+        xhr.upload.onprogress = (evt) => {
+          if (!evt.lengthComputable) return;
+          setUploadPct(Math.round((evt.loaded / evt.total) * 100));
+        };
+
+        xhr.onload = () => {
+          let body: any = null;
+          try { body = JSON.parse(xhr.responseText); } catch {}
+          resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, body });
+        };
+
+        xhr.onerror = () => resolve({ ok: false, status: 0, body: { error: "Network error" } });
+        xhr.onabort = () => resolve({ ok: false, status: 0, body: { error: "Upload aborted" } });
+
+        xhr.send(fd);
+      });
+
+      if (!result.ok) throw new Error(result.body?.error || `Upload failed (status ${result.status})`);
+
+      setTitle(""); setContent(""); setFact(""); setMapUrl(""); setFile(null);
+      setUploadPct(0); setFormErrors({});
+      setToastSuccess("Пост создан!");
+      setDrawerOpen(false);
+      await load();
+    } catch (e: any) {
+      setToastError(e?.message || "Create failed");
+    } finally {
+      setUploadingCreate(false);
+    }
+  };
+
+  const cancelUpload = () => {
+    if (xhrRef.current && xhrRef.current.readyState !== 4) xhrRef.current.abort();
+  };
+
+  const startEdit = (row: PostRow) => {
+    setEditingId(row.id);
+    setEditTitle(row.title || "");
+    setEditContent(row.content || "");
+    setEditImageFile(row.image_file || "");        // ← изменено
+    setEditRegion(row.region || "naryn");
+    setEditSeason(row.season || "winter");
+    setEditFact(row.fact || "");
+    setEditMapUrl(row.map_url || "");
+    setEditFile(null);
+    setEditUploadPct(0);
+    setEditFormErrors({});
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditTitle(""); setEditContent(""); setEditImageFile("");
+    setEditRegion("naryn"); setEditSeason("winter"); setEditFact(""); setEditMapUrl("");
+    setEditFile(null); setEditUploadPct(0); setEditFormErrors({});
+  };
+
+  const validateEditForm = () => {
+    const errors: Record<string, string> = {};
+    if (!editTitle.trim()) errors.editTitle = "Заполни Title";
+    if (!editContent.trim()) errors.editContent = "Заполни Content";
+    if (!editRegion.trim()) errors.editRegion = "Выбери region";
+    if (!editSeason.trim()) errors.editSeason = "Выбери season";
+    if (!editFact.trim()) errors.editFact = "Заполни fact (1 строка)";
+    setEditFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const saveEditViaWorker = async () => {
+    if (!validateEditForm()) return;
+    setSavingText(true);
+    setToastError("");
+    setToastSuccess("");
+
+    try {
+      if (!WORKER_BASE_URL) throw new Error("Не задан VITE_WORKER_BASE_URL");
+      const jwt = await getJwtOrThrow();
+
+      const res = await fetch(`${stripTrailingSlash(WORKER_BASE_URL)}/api/admin/update-post`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({
+          id: editingId,
+          title: editTitle.trim(),
+          content: editContent.trim(),
+          region: editRegion,
+          season: editSeason,
+          fact: editFact.trim(),
+          map_url: editMapUrl.trim() || null,
+          map_region: editRegion,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Update failed (status ${res.status})`);
+
+      setToastSuccess("Пост обновлён!");
+      cancelEdit();
+      await load();
+    } catch (e: any) {
+      setToastError(e?.message || "Update failed");
+    } finally {
+      setSavingText(false);
+    }
+  };
+
+  const replaceImageViaWorker = async () => {   // ← было replaceVideoViaWorker
+    if (editingId === null) return;
+
+    setToastError("");
+    setToastSuccess("");
+
+    try {
+      if (!WORKER_BASE_URL) throw new Error("Не задан VITE_WORKER_BASE_URL");
+      if (!editFile) throw new Error("Выбери новое изображение");
+      const v = validateImageFile(editFile);
+      if (v) throw new Error(v);
+
+      setUploadingImage(true);
+      setEditUploadPct(0);
+
+      const jwt = await getJwtOrThrow();
+
+      const fd = new FormData();
+      fd.append("id", String(editingId));
+      fd.append("file", editFile);
+
+      const url = `${stripTrailingSlash(WORKER_BASE_URL)}/api/admin/replace-video`;  // Можно оставить endpoint или поменять позже
+
+      const xhr = new XMLHttpRequest();
+      editXhrRef.current = xhr;
+
+      const result = await new Promise<{ ok: boolean; status: number; body: any }>((resolve) => {
+        xhr.open("POST", url, true);
+        xhr.setRequestHeader("Authorization", `Bearer ${jwt}`);
+
+        xhr.upload.onprogress = (evt) => {
+          if (!evt.lengthComputable) return;
+          setEditUploadPct(Math.round((evt.loaded / evt.total) * 100));
+        };
+
+        xhr.onload = () => {
+          let body: any = null;
+          try { body = JSON.parse(xhr.responseText); } catch {}
+          resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, body });
+        };
+
+        xhr.onerror = () => resolve({ ok: false, status: 0, body: { error: "Network error" } });
+        xhr.onabort = () => resolve({ ok: false, status: 0, body: { error: "Upload aborted" } });
+
+        xhr.send(fd);
+      });
+
+      if (!result.ok) throw new Error(result.body?.error || `Replace failed (status ${result.status})`);
+
+      if (typeof result.body?.file === "string") setEditImageFile(result.body.file);
+
+      setEditFile(null);
+      setEditUploadPct(0);
+      setToastSuccess("Картинка заменена!");
+      await load();
+    } catch (e: any) {
+      setToastError(e?.message || "Replace image failed");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const cancelEditUpload = () => {
+    if (editXhrRef.current && editXhrRef.current.readyState !== 4) editXhrRef.current.abort();
+  };
+
+  const askDelete = (id: number) => {
+    setConfirmId(id);
+    setConfirmOpen(true);
+  };
+
+  const removeViaWorker = async () => {
+    const id = confirmId;
+    if (id == null) return;
+
+    setSavingText(true);
+    setToastError("");
+    setToastSuccess("");
+
+    try {
+      if (!WORKER_BASE_URL) throw new Error("Не задан VITE_WORKER_BASE_URL");
+      const jwt = await getJwtOrThrow();
+
+      const res = await fetch(`${stripTrailingSlash(WORKER_BASE_URL)}/api/admin/delete-post`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({ id }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Delete failed (status ${res.status})`);
+
+      setToastSuccess(`Пост #${id} удалён`);
+      setConfirmOpen(false);
+      setConfirmId(null);
+      await load();
+    } catch (e: any) {
+      setToastError(e?.message || "Delete failed");
+    } finally {
+      setSavingText(false);
+    }
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
+  };
+
+  const SortIndicator = ({ k }: { k: SortKey }) => {
+    if (sort.key !== k) return <span className="sortInd">·</span>;
+    return sort.direction === "asc" ? (
+      <span className="sortInd"><Icon name="chevUp" /></span>
+    ) : (
+      <span className="sortInd"><Icon name="chevDown" /></span>
+    );
+  };
+
+  return (
+    <div className="adm">
+      {/* Topbar */}
+      <div className="admTop">
+        <div className="admTopIn">
+          <div className="brand">
+            <div className="brandLogo">
+              <Icon name="spark" className="i-18" />
+            </div>
+            <div className="brandTxt">
+              <div className="brandTitle">KG Admin</div>
+              <div className="brandSub">Posts • Supabase • Worker API</div>
+            </div>
+          </div>
+
+          <div className="topActions">
+            <button className="btn btnPrimary" onClick={() => setDrawerOpen(true)} disabled={isBusy}>
+              <Icon name="plus" /> Новый пост
+            </button>
+            <button className="btn btnGhost" onClick={load} disabled={isBusy}>
+              <Icon name="refresh" /> Обновить
+            </button>
+            <button className="btn btnDanger" onClick={logout} disabled={isBusy}>
+              <Icon name="logout" /> Выйти
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main layout */}
+      <div className="admBody">
+        <aside className="panel">
+          <div className="panelCard">
+            <div className="panelHead">
+              <div>
+                <div className="h2">Обзор</div>
+                <div className="muted">Фильтры, статусы, статистика</div>
+              </div>
+              <Chip tone={WORKER_BASE_URL ? "ok" : "danger"}>{WORKER_BASE_URL ? "Worker OK" : "NO WORKER"}</Chip>
+            </div>
+
+            <div className="kpis">
+              <div className="kpi">
+                <div className="kpiLabel">Всего</div>
+                <div className="kpiVal">{stats.total}</div>
+              </div>
+              <div className="kpi">
+                <div className="kpiLabel">С картинкой</div>
+                <div className="kpiVal">{stats.withImage}</div>
+              </div>
+              <div className="kpi">
+                <div className="kpiLabel">Топ регион</div>
+                <div className="kpiVal">{regionLabel(stats.topRegion)}</div>
+              </div>
+            </div>
+
+            <div className="sep" />
+
+            <div className="searchBox">
+              <Icon name="search" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} className="inputPlain" placeholder="Поиск: title / content / fact" />
+            </div>
+
+            <div className="filters">
+              <div className="fRow">
+                <div className="fLabel"><Icon name="filter" /> Регион</div>
+                <select className="select" value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)}>
+                  <option value="all">Все</option>
+                  {REGIONS.map((r) => <option key={r.v} value={r.v}>{r.label}</option>)}
+                </select>
+              </div>
+
+              <div className="fRow">
+                <div className="fLabel"><Icon name="filter" /> Сезон</div>
+                <select className="select" value={seasonFilter} onChange={(e) => setSeasonFilter(e.target.value)}>
+                  <option value="all">Все</option>
+                  {SEASONS.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
+                </select>
+              </div>
+
+              <div className="fMeta">
+                <Chip tone="info">Найдено: {sorted.length}</Chip>
+                <Chip tone="neutral">Стр: {currentPage}/{pageCount}</Chip>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <main className="content">
+          <div className="card">
+            <div className="cardHead">
+              <div>
+                <div className="h2">Посты</div>
+                <div className="muted">Сортировка • быстрые действия</div>
+              </div>
+              <div className="rightMeta">
+                <Chip tone="neutral">Показано: {paginated.length}</Chip>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="sk">
+                <div className="skLine" /><div className="skLine" /><div className="skLine" /><div className="skLine" />
+              </div>
+            ) : (
+              <>
+                <div className="tableWrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th><button className="thBtn" onClick={() => requestSort("id")}>ID <SortIndicator k="id" /></button></th>
+                        <th><button className="thBtn" onClick={() => requestSort("created_at")}>Дата <SortIndicator k="created_at" /></button></th>
+                        <th><button className="thBtn" onClick={() => requestSort("title")}>Заголовок <SortIndicator k="title" /></button></th>
+                        <th className="hideSm"><button className="thBtn" onClick={() => requestSort("region")}>Регион <SortIndicator k="region" /></button></th>
+                        <th className="hideSm"><button className="thBtn" onClick={() => requestSort("season")}>Сезон <SortIndicator k="season" /></button></th>
+                        <th className="actions">Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginated.length === 0 ? (
+                        <tr><td colSpan={6} className="empty">Ничего не найдено.</td></tr>
+                      ) : (
+                        paginated.map((row) => (
+                          <tr key={row.id}>
+                            <td className="mono">#{row.id}</td>
+                            <td className="mono">{new Date(row.created_at).toLocaleString()}</td>
+                            <td>
+                              <div className="tTitle">{row.title || "—"}</div>
+                              <div className="tSub">
+                                <Chip tone="neutral">{seasonLabel(row.season)}</Chip>
+                                <Chip tone="neutral">{regionLabel(row.region)}</Chip>
+                                <Chip tone={row.image_file ? "ok" : "warn"}>{row.image_file ? "есть" : "нет"}</Chip>
+                              </div>
+                            </td>
+                            <td className="hideSm">{regionLabel(row.region)}</td>
+                            <td className="hideSm">{seasonLabel(row.season)}</td>
+                            <td className="actions">
+                              <button className="btn btnGhost btnSm" onClick={() => startEdit(row)} disabled={isBusy}>
+                                <Icon name="pencil" /> Редакт.
+                              </button>
+                              <button className="btn btnDanger btnSm" onClick={() => askDelete(row.id)} disabled={isBusy}>
+                                <Icon name="trash" /> Удалить
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="pager">
+                  <button className="btn btnGhost btnSm" onClick={() => setCurrentPage(p => Math.max(1, p-1))} disabled={currentPage === 1}>Назад</button>
+                  <div className="pages">
+                    {Array.from({ length: pageCount }, (_, i) => i + 1)
+                      .slice(Math.max(0, currentPage - 4), Math.min(pageCount, currentPage + 3))
+                      .map(p => (
+                        <button key={p} className={clsx("pBtn", p === currentPage && "pBtnA")} onClick={() => setCurrentPage(p)}>{p}</button>
+                      ))}
+                  </div>
+                  <button className="btn btnGhost btnSm" onClick={() => setCurrentPage(p => Math.min(pageCount, p+1))} disabled={currentPage === pageCount}>Вперёд</button>
+                </div>
+              </>
+            )}
+          </div>
+        </main>
+      </div>
+
+      {/* Drawer: Create */}
+      <AnimatePresence>
+        {drawerOpen && (
+          <motion.div className="drawerOverlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(e) => { if (e.target === e.currentTarget) setDrawerOpen(false); }}>
+            <motion.div className="drawer" initial={{ x: 24, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 24, opacity: 0 }}>
+              <div className="drawerHead">
+                <div>
+                  <div className="h2">Новый пост</div>
+                  <div className="muted">Быстро, чисто, современно</div>
+                </div>
+                <button className="iconBtn" onClick={() => setDrawerOpen(false)}><Icon name="x" /></button>
+              </div>
+
+              <div className="drawerBody">
+                <div className="grid2">
+                  <Field label="Заголовок" error={formErrors.title}>
+                    <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Например: Озеро Сон-Куль" disabled={isBusy} />
+                  </Field>
+
+                  <Field label="Факт (1 строка)" error={formErrors.fact} hint="Коротко, как тэглайн">
+                    <input className="input" value={fact} onChange={(e) => setFact(e.target.value)} placeholder="Например: Самое высокогорное озеро..." disabled={isBusy} />
+                  </Field>
+                </div>
+
+                <Field label="Содержание" error={formErrors.content} hint="Можно длинный текст">
+                  <textarea className="textarea" value={content} onChange={(e) => setContent(e.target.value)} placeholder="Текст поста..." disabled={isBusy} />
+                </Field>
+
+                <div className="grid3">
+                  <Field label="Регион" error={formErrors.region}>
+                    <select className="select" value={region} onChange={(e) => setRegion(e.target.value)} disabled={isBusy}>
+                      {REGIONS.map((r) => <option key={r.v} value={r.v}>{r.label}</option>)}
+                    </select>
+                  </Field>
+
+                  <Field label="Сезон" error={formErrors.season}>
+                    <select className="select" value={season} onChange={(e) => setSeason(e.target.value)} disabled={isBusy}>
+                      {SEASONS.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
+                    </select>
+                  </Field>
+
+                  <Field label="Ссылка на карту" hint="Опционально">
+                    <input className="input" value={mapUrl} onChange={(e) => setMapUrl(e.target.value)} placeholder="https://..." disabled={isBusy} />
+                  </Field>
+                </div>
+
+                <div className="uploadCard">
+                  <div className="uploadTop">
+                    <div className="row gap8">
+                      <Icon name="image" />
+                      <div>
+                        <div className="strong">Картинка</div>
+                        <div className="muted">jpg, png, webp, gif • до 15 МБ</div>
+                      </div>
+                    </div>
+
+                    {file ? (
+                      <Chip tone="ok">{file.name} • {humanFileSize(file.size)}</Chip>
+                    ) : (
+                      <Chip tone="warn">Файл не выбран</Chip>
+                    )}
+                  </div>
+
+                  <div className="row gap8 wrap">
+                    <label className={clsx("btn btnGhost", isBusy && "btnDis")}>
+                      <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(e) => setFile(e.target.files?.[0] || null)} disabled={isBusy} style={{ display: "none" }} />
+                      <Icon name="upload" /> Выбрать файл
+                    </label>
+
+                    {file && (
+                      <button className="btn btnGhost" onClick={() => setFile(null)} disabled={isBusy}>
+                        <Icon name="x" /> Очистить
+                      </button>
+                    )}
+                  </div>
+
+                  {formErrors.file && <div className="fieldError">{formErrors.file}</div>}
+
+                  {uploadingCreate && (
+                    <div className="prog">
+                      <div className="row rowBetween">
+                        <div className="muted">Загрузка… {uploadPct}%</div>
+                        <button className="btn btnDanger btnSm" onClick={cancelUpload}>Отмена</button>
+                      </div>
+                      <progress className="progress" value={uploadPct} max={100} />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="drawerFoot">
+                <button className="btn btnGhost" onClick={() => setDrawerOpen(false)} disabled={isBusy}>Отмена</button>
+                <button className="btn btnPrimary" onClick={createViaWorker} disabled={isBusy}>
+                  {uploadingCreate ? "Загрузка..." : "Создать пост"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Modal */}
+      <Modal
+        open={isEditing}
+        title={editingId ? `Редактирование #${editingId}` : "Редактирование"}
+        onClose={() => (isBusy ? null : cancelEdit())}
+        wide
+        footer={
+          <div className="row rowBetween wrap gap8">
+            <button className="btn btnGhost" onClick={cancelEdit} disabled={isBusy}>Отмена</button>
+            <button className="btn btnPrimary" onClick={saveEditViaWorker} disabled={isBusy}>
+              {savingText ? "Сохранение..." : "Сохранить"}
+            </button>
+          </div>
+        }
+      >
+        <div className="grid2">
+          <Field label="Заголовок" error={editFormErrors.editTitle}>
+            <input className="input" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} disabled={isBusy} />
+          </Field>
+          <Field label="Факт (1 строка)" error={editFormErrors.editFact}>
+            <input className="input" value={editFact} onChange={(e) => setEditFact(e.target.value)} disabled={isBusy} />
+          </Field>
+        </div>
+
+        <Field label="Содержание" error={editFormErrors.editContent}>
+          <textarea className="textarea" value={editContent} onChange={(e) => setEditContent(e.target.value)} disabled={isBusy} />
+        </Field>
+
+        <div className="grid3">
+          <Field label="Регион" error={editFormErrors.editRegion}>
+            <select className="select" value={editRegion} onChange={(e) => setEditRegion(e.target.value)} disabled={isBusy}>
+              {REGIONS.map((r) => <option key={r.v} value={r.v}>{r.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Сезон" error={editFormErrors.editSeason}>
+            <select className="select" value={editSeason} onChange={(e) => setEditSeason(e.target.value)} disabled={isBusy}>
+              {SEASONS.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Ссылка на карту" hint="Опционально">
+            <input className="input" value={editMapUrl} onChange={(e) => setEditMapUrl(e.target.value)} disabled={isBusy} />
+          </Field>
+        </div>
+
+        <div className="sep" />
+
+        <div className="uploadCard">
+          <div className="uploadTop">
+            <div className="row gap8">
+              <Icon name="image" />
+              <div>
+                <div className="strong">Картинка</div>
+                <div className="muted">Текущее: {editImageFile || "—"}</div>
+              </div>
+            </div>
+
+            <div className="row gap8 wrap">
+              <label className={clsx("btn btnGhost btnSm", isBusy && "btnDis")}>
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(e) => setEditFile(e.target.files?.[0] || null)} disabled={isBusy} style={{ display: "none" }} />
+                <Icon name="upload" /> Выбрать
+              </label>
+
+              <button className="btn btnPrimary btnSm" onClick={replaceImageViaWorker} disabled={isBusy || !editFile}>
+                {uploadingImage ? "Загрузка..." : "Заменить"}
+              </button>
+
+              {editFile && (
+                <button className="btn btnGhost btnSm" onClick={() => setEditFile(null)} disabled={isBusy}>
+                  <Icon name="x" /> Сброс
+                </button>
+              )}
+            </div>
+          </div>
+
+          {editFile && (
+            <div className="row rowBetween wrap gap8 mt8">
+              <Chip tone="neutral">{editFile.name} • {humanFileSize(editFile.size)}</Chip>
+              <Chip tone={validateImageFile(editFile) ? "danger" : "ok"}>{validateImageFile(editFile) ? "Не валидно" : "Ок"}</Chip>
+            </div>
+          )}
+
+          {uploadingImage && (
+            <div className="prog mt8">
+              <div className="row rowBetween">
+                <div className="muted">Загрузка… {editUploadPct}%</div>
+                <button className="btn btnDanger btnSm" onClick={cancelEditUpload}>Отмена</button>
+              </div>
+              <progress className="progress" value={editUploadPct} max={100} />
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Confirm delete */}
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Удалить пост?"
+        description={confirmId != null ? `Пост #${confirmId} будет удалён без возможности восстановления.` : ""}
+        confirmText={confirmId != null ? `Удалить #${confirmId}` : "Удалить"}
+        danger
+        busy={savingText}
+        onCancel={() => { if (!savingText) { setConfirmOpen(false); setConfirmId(null); } }}
+        onConfirm={removeViaWorker}
+      />
+
+      {/* Toasts */}
+      <div className="toasts">
+        <AnimatePresence>
+          {toastSuccess && <Toast kind="success" message={toastSuccess} onClose={() => setToastSuccess("")} />}
+          {toastError && <Toast kind="error" message={toastError} onClose={() => setToastError("")} />}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
