@@ -2492,4 +2492,6 @@ export default function Admin() {
  s r c / a s s e t s /  
  * . m s i  
  * . e x e  
- 
+ src/assets/
+*.msi
+*.exe
