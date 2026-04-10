@@ -2495,3 +2495,6 @@ export default function Admin() {
  src/assets/
 *.msi
 *.exe
+src/assets/
+*.msi
+*.exe
