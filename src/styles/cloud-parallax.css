@@ -1,0 +1,57 @@
+.cloud-parallax-container {
+  position: relative;
+  height: 600px;           /* или 80vh — высота зоны с облаками */
+  width: 100%;
+  overflow: hidden;
+  background: linear-gradient(to bottom, #a0c4ff, #e0f0ff); /* нежное небо */
+}
+
+.cloud-layer {
+  position: absolute;
+  inset: 0;
+  background-repeat: repeat-x;
+  background-size: 200% auto;   /* важно для плавного движения */
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+/* Слой 1 — дальние облака (более прозрачные) */
+.layer-1 {
+  background-image: url('../logo.png'); /* или SVG */
+  opacity: 0.45;
+  background-position-y: 20%;
+}
+
+/* Слой 2 */
+.layer-2 {
+  background-image: url('../logo.png');
+  opacity: 0.65;
+  background-position-y: 40%;
+}
+
+/* Слой 3 — ближние + больше мутности */
+.layer-3 {
+  background-image: url('');
+  opacity: 0.8;
+  background-position-y: 60%;
+}
+
+.fog {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 30%,
+    rgba(255, 255, 255, 0.6) 50%,
+    transparent 80%
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Адаптив */
+@media (max-width: 768px) {
+  .cloud-parallax-container {
+    height: 400px;
+  }
+}

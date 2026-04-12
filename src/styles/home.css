@@ -5,53 +5,63 @@
   box-sizing: border-box;
 }
 
-html, body {
+html, body, #root {
   margin: 0 !important;
   padding: 0 !important;
   width: 100%;
   overflow-x: hidden;
 }
 
-/* Если используешь React Router или Vite — часто помогает */
-#root {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-}
 .home-page {
   width: 100%;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
 
-  min-height: 100vh;
+.hero-slider {
+  position: relative;
+  width: 100%;
   height: 100vh;
 }
 
 .hero-slide {
-  position: relative;
-  width: 100%;
-  height: 100vh;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 800ms ease-in-out, visibility 800ms ease-in-out;
   overflow: hidden;
+}
+
+.hero-slide.active {
+  opacity: 1;
+  visibility: visible;
+  z-index: 1;
 }
 
 .hero-bg {
   position: absolute;
-  top: 0;
-  left: 0;
+  inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;           /* картинка заполняет весь экран */
+  object-fit: cover;
   z-index: 1;
+  transition: transform 10s ease;
+}
+
+.hero-slide.active .hero-bg {
+  transform: scale(1.08); /* лёгкий кинематографический зум */
 }
 
 .hero-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.3),
-    rgba(0, 0, 0, 0.65)
+    rgba(0, 0, 0, 0.25),
+    rgba(0, 0, 0, 0.55) 50%,
+    rgba(0, 0, 0, 0.75)
   );
   z-index: 2;
 }
@@ -64,44 +74,83 @@ html, body {
   text-align: center;
   color: white;
   z-index: 3;
-  padding: 0 20px;
-  max-width: 900px;
+  padding: 0 24px;
+  max-width: 920px;
+  animation: fadeUp 1s ease forwards;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -40%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
 }
 
 .hero-title {
-  font-size: 3.2rem;
+  font-size: clamp(2.4rem, 5vw, 4.2rem);
   font-weight: 800;
-  margin-bottom: 16px;
-  text-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+  line-height: 1.1;
+  margin-bottom: 1.2rem;
+  text-shadow: 0 6px 20px rgba(0, 0, 0, 0.7);
+  letter-spacing: -0.02em;
 }
 
 .hero-fact {
-  font-size: 1.35rem;
-  margin-bottom: 20px;
-  max-width: 700px;
+  font-size: clamp(1.2rem, 2.5vw, 1.5rem);
+  margin-bottom: 1.5rem;
+  max-width: 720px;
   margin-left: auto;
   margin-right: auto;
-  line-height: 1.4;
+  line-height: 1.45;
+  font-weight: 400;
 }
 
 .hero-region {
-  font-size: 1.1rem;
-  opacity: 0.9;
-  letter-spacing: 1px;
+  font-size: 1.15rem;
+  opacity: 0.95;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-weight: 500;
 }
 
-/* Адаптив */
-@media (max-width: 768px) {
-  .hero-title {
-    font-size: 2.4rem;
-  }
-  .hero-fact {
-    font-size: 1.15rem;
-  }
+/* Dots */
+.hero-dots {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  z-index: 10;
 }
 
-@media (max-width: 480px) {
-  .hero-title {
-    font-size: 2rem;
+.hero-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.hero-dot.active,
+.hero-dot:hover {
+  background: #fff;
+  transform: scale(1.3);
+}
+
+/* Адаптив (ещё лучше) */
+@media (max-width: 640px) {
+  .hero-content {
+    padding: 0 20px;
+  }
+  
+  .hero-dots {
+    bottom: 30px;
   }
 }
